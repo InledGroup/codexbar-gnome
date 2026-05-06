@@ -213,7 +213,45 @@ export default class CodexBarExtension extends Extension {
                     stdout: trimmedStdout,
                     stderr: trimmedStderr,
                     command: finalCommand,
+                    labels: [],
                 };
+
+                // Automatic label detection
+                try {
+                    let discoveryCommand = finalCommand
+                        .replace('--format json', '')
+                        .replace('--json-only', '')
+                        .replace('--json', '')
+                        .replace('--pretty', '');
+                    
+                    const dProc = Gio.Subprocess.new(
+                        ['bash', '-c', discoveryCommand],
+                        Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+                    );
+
+                    const [dStdout] = await new Promise((resolve) => {
+                        dProc.communicate_utf8_async(null, this._cancellable, (p, res) => {
+                            try {
+                                const [ok, out] = p.communicate_utf8_finish(res);
+                                resolve([out || '']);
+                            } catch (e) {
+                                resolve(['']);
+                            }
+                        });
+                    });
+
+                    if (dStdout) {
+                        const lines = dStdout.split('\n');
+                        for (let line of lines) {
+                            const match = line.match(/^([^:]+):\s+\d+%/);
+                            if (match) {
+                                this._providersData[i].labels.push(match[1].trim());
+                            }
+                        }
+                    }
+                } catch (discoveryErr) {
+                    log(`CodexBar: Label discovery failed for ${provider.name}: ${discoveryErr.message}`);
+                }
 
                 if (trimmedStdout && (trimmedStdout.startsWith('[') || trimmedStdout.startsWith('{'))) {
                     try {
@@ -375,11 +413,13 @@ export default class CodexBarExtension extends Extension {
         }
 
         const tiers = ['primary', 'secondary', 'tertiary', 'quaternary'];
-        for (let tier of tiers) {
+        const discoveredLabels = activeData.labels || [];
+        
+        tiers.forEach((tier, tierIdx) => {
             if (usage[tier] && usage[tier].usedPercent !== undefined) {
                 let tierData = usage[tier];
                 
-                let tierTitle = tier.charAt(0).toUpperCase() + tier.slice(1);
+                let tierTitle = discoveredLabels[tierIdx] || (tier.charAt(0).toUpperCase() + tier.slice(1));
                 this._contentBox.add_child(new St.Label({ text: tierTitle, style_class: 'codexbar-usage-title' }));
                 
                 let progressContainer = new St.BoxLayout({ style_class: 'codexbar-progress-container' });
@@ -418,7 +458,7 @@ export default class CodexBarExtension extends Extension {
                 let sep = new St.Widget({ style: 'height: 1px; background-color: rgba(255,255,255,0.05); margin-bottom: 10px; margin-top: 5px;' });
                 this._contentBox.add_child(sep);
             }
-        }
+        });
     }
 
     _showWelcomeScreen(codexbarExists) {
