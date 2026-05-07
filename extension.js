@@ -176,9 +176,27 @@ export default class CodexBarExtension extends Extension {
                         continue;
                     }
                     const data = await this._apiClient.fetchSummary(token);
+                    
+                    // Generate dynamic labels based on window durations
+                    let apiLabels = [];
+                    ['primary', 'secondary', 'tertiary', 'quaternary'].forEach(tier => {
+                        const win = data.usage[tier];
+                        if (win && win.windowSeconds) {
+                            const hours = Math.round(win.windowSeconds / 3600);
+                            if (hours >= 24) {
+                                const days = Math.round(hours / 24);
+                                apiLabels.push(days === 7 ? _('Weekly Window') : _('%d-Day Window').format(days));
+                            } else {
+                                apiLabels.push(_('%d-Hour Window').format(hours));
+                            }
+                        } else if (win) {
+                            apiLabels.push(_('Usage Window'));
+                        }
+                    });
+                    
                     this._providersData[i] = {
                         data: data,
-                        labels: [_('5-Hour Window'), _('Weekly Window')],
+                        labels: apiLabels,
                     };
                 } catch (error) {
                     logError(error, `CodexBar API error for ${provider.name}`);

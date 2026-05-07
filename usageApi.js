@@ -41,6 +41,19 @@ export class UsageApiClient {
 
         // Step 2: Use the access token to fetch usage
         const usagePayload = await this._getJsonWithAuth(SUMMARY_ENDPOINT, sessionData.accessToken);
+        
+        // Step 3: Ensure we have an email (fallback to /me if missing from usage payload)
+        if (!usagePayload.email) {
+            try {
+                const meData = await this._getJsonWithAuth(ME_ENDPOINT, sessionData.accessToken);
+                if (meData && meData.email) {
+                    usagePayload.email = meData.email;
+                }
+            } catch (e) {
+                log(`CodexBar: Failed to fetch email from /me fallback: ${e.message}`);
+            }
+        }
+
         return this.normalizeSummary(usagePayload);
     }
 
@@ -119,52 +132,105 @@ export class UsageApiClient {
 
 
     normalizeSummary(payload) {
-        // We want to return a structure compatible with what codexbar-cli returns if possible,
-        // or at least what our extension expects.
-        
-        // Original extension expects:
-        // { usage: { primary: { usedPercent: ... }, accountEmail: ... } }
-        
+        // Log keys of the payload for debugging if no windows are found
         const windows = this.extractWindows(payload);
-        const primary = windows.find(w => w.window_seconds === 5 * 3600) || windows[0];
         
+        if (windows.length === 0) {
+            log(`CodexBar: No usage windows found in payload. Keys: ${Object.keys(payload).join(', ')}`);
+            log(`CodexBar: Full payload snippet: ${JSON.stringify(payload).substring(0, 1000)}`);
+            // Deep log of first level of rate_limit if it exists
+            if (payload.rate_limit) log(`CodexBar: rate_limit keys: ${Object.keys(payload.rate_limit).join(', ')}`);
+        }
+
+        // Sort by window size (smallest first, e.g. 3h before 24h)
+        const sorted = windows.sort((a, b) => (a.window_seconds || 0) - (b.window_seconds || 0));
+        
+        const formatReset = (seconds) => {
+            if (!seconds) return '';
+            if (seconds < 60) return `Resets in ${Math.round(seconds)}s`;
+            if (seconds < 3600) return `Resets in ${Math.round(seconds / 60)}m`;
+            return `Resets in ${Math.round(seconds / 3600)}h`;
+        };
+
+        const mapWindow = (w) => w ? {
+            usedPercent: w.percent * 100,
+            resetDescription: formatReset(w.reset_after_seconds),
+            windowSeconds: w.window_seconds
+        } : null;
+
         return {
             usage: {
                 accountEmail: payload?.email || 'API User',
                 updatedAt: new Date().toISOString(),
-                primary: primary ? {
-                    usedPercent: primary.percent * 100,
-                    resetDescription: primary.reset_after_seconds ? `Resets in ${Math.round(primary.reset_after_seconds / 60)}m` : ''
-                } : null,
-                secondary: windows[1] ? {
-                    usedPercent: windows[1].percent * 100,
-                    resetDescription: windows[1].reset_after_seconds ? `Resets in ${Math.round(windows[1].reset_after_seconds / 3600)}h` : ''
-                } : null,
-                // Add more if needed
+                primary: mapWindow(sorted[0]),
+                secondary: mapWindow(sorted[1]),
+                tertiary: mapWindow(sorted[2]),
+                quaternary: mapWindow(sorted[3]),
             }
         };
     }
 
     extractWindows(payload) {
         const windows = [];
+        const seen = new Set();
+
         const collect = (obj) => {
-            if (!obj || typeof obj !== 'object') return;
-            if (obj.used !== undefined && obj.limit !== undefined) {
-                const limit = obj.limit || 1; // Avoid division by zero
-                windows.push({
-                    used: obj.used,
-                    limit: obj.limit,
-                    percent: obj.used / limit,
-                    window_seconds: obj.window_seconds || obj.duration_seconds,
-                    reset_after_seconds: obj.reset_after_seconds
-                });
+            if (!obj || typeof obj !== 'object' || seen.has(obj)) return;
+            seen.add(obj);
+            
+            // Support for used_percent directly (often found in Free/Basic plans)
+            if (obj.used_percent !== undefined) {
+                const percent = parseFloat(obj.used_percent) / 100;
+                if (!isNaN(percent)) {
+                    windows.push({
+                        used: percent, // We don't have absolute numbers, so we use the ratio
+                        limit: 1,
+                        percent: percent,
+                        window_seconds: obj.limit_window_seconds || obj.window_seconds || obj.duration_seconds || obj.duration || 0,
+                        reset_after_seconds: obj.reset_after_seconds || obj.reset_after || 0
+                    });
+                }
             }
-            Object.values(obj).forEach(collect);
+
+            // Look for usage/limit pairs
+            // Usage variants: usage, used, count, current_usage, used_count, request_count
+            // Limit variants: limit, cap, max, max_usage, usage_limit, max_requests, total
+            let usedValue = obj.used ?? obj.usage ?? obj.count ?? obj.current_usage ?? obj.used_count ?? obj.request_count;
+            let limitValue = obj.limit ?? obj.cap ?? obj.max ?? obj.max_usage ?? obj.usage_limit ?? obj.max_requests ?? obj.total;
+            
+            // Special case: remaining and limit
+            if (usedValue === undefined && obj.remaining !== undefined && limitValue !== undefined) {
+                usedValue = parseFloat(limitValue) - parseFloat(obj.remaining);
+            }
+
+            if (usedValue !== undefined && limitValue !== undefined) {
+                const used = parseFloat(usedValue);
+                const limit = parseFloat(limitValue);
+                
+                if (!isNaN(used) && !isNaN(limit) && limit > 0) {
+                    windows.push({
+                        used: used,
+                        limit: limit,
+                        percent: used / limit,
+                        window_seconds: obj.window_seconds || obj.duration_seconds || obj.duration || 0,
+                        reset_after_seconds: obj.reset_after_seconds || obj.reset_after || 0
+                    });
+                }
+            }
+
+            // Recurse
+            for (const key in obj) {
+                collect(obj[key]);
+            }
         };
         
-        if (payload?.rate_limit) collect(payload.rate_limit);
-        if (payload?.additional_rate_limits) collect(payload.additional_rate_limits);
+        collect(payload);
         
-        return windows.sort((a, b) => (a.window_seconds || 0) - (b.window_seconds || 0));
+        // De-duplicate windows with same window_seconds and percent
+        return windows.filter((w, index, self) => 
+            index === self.findIndex((t) => (
+                t.window_seconds === w.window_seconds && t.percent === w.percent
+            ))
+        );
     }
 }
