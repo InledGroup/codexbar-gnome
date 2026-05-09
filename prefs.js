@@ -37,7 +37,111 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
 
         this.add(this._buildSettingsGroup());
         this.add(this._buildProvidersGroup());
+        this.add(this._buildContributeGroup());
         this.add(this._buildMaintenanceGroup());
+    }
+
+    /**
+     * Build the contribute and contact group.
+     * Construye el grupo de contribución y contacto.
+     */
+    _buildContributeGroup() {
+        const group = new Adw.PreferencesGroup({
+            title: _('Contribute & Contact'),
+            description: _('Support CodexBar development and get in touch with the team.'),
+        });
+
+        // Pull Request / Contribute
+        const prRow = new Adw.ActionRow({
+            title: _('Add a New Provider'),
+            subtitle: _('Help the community by submitting a Pull Request on GitHub'),
+        });
+        prRow.add_prefix(new Gtk.Image({ icon_name: 'window-new-symbolic' }));
+        
+        const prBtn = new Gtk.Button({
+            icon_name: 'go-next-symbolic',
+            valign: Gtk.Align.CENTER,
+            css_classes: ['flat'],
+        });
+        prBtn.connect('clicked', () => {
+            Gio.app_info_launch_default_for_uri('https://github.com/InledGroup/codexbar-gnome', null);
+        });
+        prRow.add_suffix(prBtn);
+        group.add(prRow);
+
+        // Review on GNOME Extensions
+        const reviewRow = new Adw.ActionRow({
+            title: _('Leave a Review'),
+            subtitle: _('Rate us on the GNOME Extensions website or share it on social media!'),
+        });
+        reviewRow.add_prefix(new Gtk.Image({ icon_name: 'starred-symbolic' }));
+
+        const reviewBtn = new Gtk.Button({
+            icon_name: 'go-next-symbolic',
+            valign: Gtk.Align.CENTER,
+            css_classes: ['flat'],
+        });
+        reviewBtn.connect('clicked', () => {
+            Gio.app_info_launch_default_for_uri('https://extensions.gnome.org/extension/9841/codexbar/', null);
+        });
+        reviewRow.add_suffix(reviewBtn);
+        group.add(reviewRow);
+
+        // Inled Newsletter
+        const newsRow = new Adw.ActionRow({
+            title: _('Inled Newsletter'),
+            subtitle: _('Get the latest news and updates from Inled directly in your inbox!'),
+        });
+        newsRow.add_prefix(new Gtk.Image({ icon_name: 'mail-send-symbolic' }));
+
+        const newsBtn = new Gtk.Button({
+            icon_name: 'go-next-symbolic',
+            valign: Gtk.Align.CENTER,
+            css_classes: ['flat'],
+        });
+        newsBtn.connect('clicked', () => {
+            Gio.app_info_launch_default_for_uri('https://7c0cb458.sibforms.com/serve/MUIFAPqS4aMwyG9eiASS-LRNOT1zsY2xefVUxEuu2jAL8znxvos7hP7gQsASGgyC6FdUHJvi2SOr4NUmxUqmkcBOTRyGUZauKcn6dvP24DSLYDmXnHyIO3ZToBhJ6PGaE5JnYTdECW_d6ezFdrjwEmRihA2TkJsf8HueD3VesU8vkYGa_1iHNFWwq3yvrRD7gVXgiEj2l8rib1CL5A==', null);
+        });
+        newsRow.add_suffix(newsBtn);
+        group.add(newsRow);
+
+        // Contact Inled
+        const contactRow = new Adw.ActionRow({
+            title: _('Contact Inled'),
+            subtitle: _('Questions? Suggestions? Write to us at hi@inled.es'),
+        });
+        contactRow.add_prefix(new Gtk.Image({ icon_name: 'mail-message-new-symbolic' }));
+
+        const contactBtn = new Gtk.Button({
+            icon_name: 'go-next-symbolic',
+            valign: Gtk.Align.CENTER,
+            css_classes: ['flat'],
+        });
+        contactBtn.connect('clicked', () => {
+            Gio.app_info_launch_default_for_uri('mailto:hi@inled.es', null);
+        });
+        contactRow.add_suffix(contactBtn);
+        group.add(contactRow);
+
+        // Visit Website
+        const webRow = new Adw.ActionRow({
+            title: _('Visit inled.es'),
+            subtitle: _('Discover more tools and projects that might interest you!'),
+        });
+        webRow.add_prefix(new Gtk.Image({ icon_name: 'web-browser-symbolic' }));
+
+        const webBtn = new Gtk.Button({
+            icon_name: 'go-next-symbolic',
+            valign: Gtk.Align.CENTER,
+            css_classes: ['suggested-action'],
+        });
+        webBtn.connect('clicked', () => {
+            Gio.app_info_launch_default_for_uri('https://inled.es', null);
+        });
+        webRow.add_suffix(webBtn);
+        group.add(webRow);
+
+        return group;
     }
 
     /**
@@ -118,12 +222,13 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
 
         const createProviderRow = (info, activeData = null) => {
             const isEnabled = activeData !== null;
+            const isPredefined = PREDEFINED_PROVIDERS.some(p => p.id === info.id);
             
             // Handle command defaults and migrations
             // Manejar valores por defecto y migraciones de comandos
-            let command = info.defaultCommand;
+            let command = info.defaultCommand || '';
             if (activeData) {
-                if (activeData.command && (activeData.command.includes('--provider') || info.useApi)) {
+                if (activeData.command && (activeData.command.includes('--provider') || info.useApi || !isPredefined)) {
                     command = activeData.command;
                 } else {
                     command = info.defaultCommand;
@@ -199,7 +304,7 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
                 row._commandEntry = new Gtk.Entry({ text: '' }); // Dummy
             } else {
                 const commandEntry = new Gtk.Entry({
-                    placeholder_text: _('CLI Command'),
+                    placeholder_text: _('CLI Command (e.g. codexbar --provider ...)'),
                     text: command,
                 });
                 commandEntry.connect('changed', saveProviders);
@@ -208,19 +313,35 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
                 const labelBox = new Gtk.Box({ spacing: 6 });
                 labelBox.append(new Gtk.Label({ label: _('CLI Command:'), xalign: 0 }));
                 
-                const resetBtn = new Gtk.Button({
-                    label: _('Reset Default'),
-                    valign: Gtk.Align.CENTER,
-                    css_classes: ['flat'],
-                });
-                resetBtn.connect('clicked', () => {
-                    commandEntry.set_text(info.defaultCommand);
-                    saveProviders();
-                });
-                labelBox.append(resetBtn);
+                if (isPredefined) {
+                    const resetBtn = new Gtk.Button({
+                        label: _('Reset Default'),
+                        valign: Gtk.Align.CENTER,
+                        css_classes: ['flat'],
+                    });
+                    resetBtn.connect('clicked', () => {
+                        commandEntry.set_text(info.defaultCommand);
+                        saveProviders();
+                    });
+                    labelBox.append(resetBtn);
+                }
                 
                 box.append(labelBox);
                 box.append(commandEntry);
+            }
+
+            if (!isPredefined) {
+                const deleteBtn = new Gtk.Button({
+                    label: _('Remove Provider'),
+                    margin_top: 12,
+                    css_classes: ['destructive-action'],
+                });
+                deleteBtn.connect('clicked', () => {
+                    group.remove(row);
+                    this._providerRows = this._providerRows.filter(r => r !== row);
+                    saveProviders();
+                });
+                box.append(deleteBtn);
             }
 
             row.add_row(box);
@@ -256,6 +377,79 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
                 }, p));
             }
         });
+
+        // 3. Add Custom Provider Button
+        const addBtnRow = new Adw.ActionRow({
+            title: _('Add Custom Provider'),
+            subtitle: _('Specify a name and a codexbar CLI command'),
+        });
+        
+        const addBtn = new Gtk.Button({
+            icon_name: 'list-add-symbolic',
+            valign: Gtk.Align.CENTER,
+            css_classes: ['suggested-action'],
+        });
+        
+        addBtn.connect('clicked', () => {
+            const dialog = new Adw.MessageDialog({
+                heading: _('New Provider'),
+                body: _('Enter the details for your custom AI provider.'),
+                transient_for: this.get_root(),
+                modal: true,
+            });
+
+            const content = new Gtk.Box({
+                orientation: Gtk.Orientation.VERTICAL,
+                spacing: 12,
+            });
+
+            const nameEntry = new Gtk.Entry({
+                placeholder_text: _('Provider Name (e.g. MyLocalModel)'),
+            });
+            content.append(nameEntry);
+
+            const cmdEntry = new Gtk.Entry({
+                placeholder_text: _('Command (e.g. codexbar --provider ...)'),
+            });
+            content.append(cmdEntry);
+
+            dialog.set_extra_child(content);
+            dialog.add_response('cancel', _('Cancel'));
+            dialog.add_response('add', _('Add'));
+            dialog.set_response_appearance('add', Adw.ResponseAppearance.SUGGESTED);
+
+            dialog.connect('response', (d, response) => {
+                if (response === 'add') {
+                    const name = nameEntry.get_text().trim();
+                    const cmd = cmdEntry.get_text().trim();
+                    if (name && cmd) {
+                        const newProvider = {
+                            id: `custom-${Date.now()}`,
+                            name: name,
+                            command: cmd,
+                            useApi: false
+                        };
+                        const row = createProviderRow({
+                            id: newProvider.id,
+                            name: newProvider.name,
+                            useApi: false,
+                            defaultCommand: newProvider.command
+                        }, newProvider);
+                        // Add before the "Add Custom Provider" button
+                        // Añadir antes del botón "Añadir Proveedor Personalizado"
+                        group.add(row);
+                        // Manually move it up if needed, but Adw.PreferencesGroup appends
+                        // In GNOME 45+ we can't easily reorder children in PreferencesGroup 
+                        // without removing the button and re-adding it.
+                        saveProviders();
+                    }
+                }
+            });
+            dialog.present();
+        });
+
+        addBtnRow.add_suffix(addBtn);
+        group.add(addBtnRow);
 
         return group;
     }
