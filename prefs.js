@@ -6,6 +6,10 @@ import Adw from 'gi://Adw';
 import { ExtensionPreferences, gettext as _ } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 import { storeToken, loadToken, clearToken } from './secret.js';
 
+/**
+ * Predefined providers list.
+ * Lista de proveedores predefinidos.
+ */
 const PREDEFINED_PROVIDERS = [
     { id: 'codex', name: 'Codex', useApi: true, defaultCommand: '' },
     { id: 'gemini', name: 'Gemini', useApi: false, defaultCommand: 'codexbar --provider gemini --source api --format json' },
@@ -16,6 +20,10 @@ const PREDEFINED_PROVIDERS = [
     { id: 'mistral', name: 'Mistral', useApi: false, defaultCommand: 'codexbar --provider mistral --source api --format json' },
 ];
 
+/**
+ * Preferences page for CodexBar.
+ * Página de preferencias para CodexBar.
+ */
 const CodexBarPrefsPage = GObject.registerClass(
 class CodexBarPrefsPage extends Adw.PreferencesPage {
     _init(settings) {
@@ -32,6 +40,10 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
         this.add(this._buildMaintenanceGroup());
     }
 
+    /**
+     * Build the general settings group (Refresh interval, Display mode).
+     * Construye el grupo de ajustes generales (Intervalo de refresco, Modo de visualización).
+     */
     _buildSettingsGroup() {
         const group = new Adw.PreferencesGroup({
             title: _('Settings'),
@@ -64,6 +76,10 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
         return group;
     }
 
+    /**
+     * Build the AI providers configuration group.
+     * Construye el grupo de configuración de proveedores de IA.
+     */
     _buildProvidersGroup() {
         const group = new Adw.PreferencesGroup({
             title: _('AI Providers'),
@@ -103,13 +119,13 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
         const createProviderRow = (info, activeData = null) => {
             const isEnabled = activeData !== null;
             
-            // MIGRATION LOGIC: If the command is in the old format, use the new default
+            // Handle command defaults and migrations
+            // Manejar valores por defecto y migraciones de comandos
             let command = info.defaultCommand;
             if (activeData) {
                 if (activeData.command && (activeData.command.includes('--provider') || info.useApi)) {
                     command = activeData.command;
                 } else {
-                    // Old format detected, force update to new default
                     command = info.defaultCommand;
                 }
             }
@@ -146,6 +162,8 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
             });
 
             if (info.useApi) {
+                // For Direct API providers like Codex
+                // Para proveedores de API directa como Codex
                 const tokenEntry = new Gtk.PasswordEntry({
                     placeholder_text: _('Authentication Cookie (starts with __Secure...)'),
                     text: loadToken(row._id) || '',
@@ -157,17 +175,27 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
                 row._tokenEntry = tokenEntry;
 
                 const importBtn = new Gtk.Button({
-                    label: _('Auto-Login from Browser (Chrome/Brave)'),
+                    label: _('Auto-Login from Browser (Codex Only)'),
                     margin_top: 6,
+                    tooltip_text: _('Uses a local Python script to extract cookies from Chrome/Brave. Works only for Codex.')
                 });
                 
                 importBtn.connect('clicked', () => {
                     this._importFromBrowser(row._id, tokenEntry);
                 });
                 
-                box.append(new Gtk.Label({ label: _('Session Cookies:'), xalign: 0 }));
+                box.append(new Gtk.Label({ 
+                    label: _('Session Cookies (Codex):'), 
+                    xalign: 0,
+                    css_classes: ['caption'] 
+                }));
                 box.append(tokenEntry);
                 box.append(importBtn);
+                box.append(new Gtk.Label({ 
+                    label: _('Manual entry: Paste your session cookies here.'), 
+                    xalign: 0,
+                    css_classes: ['dim-label']
+                }));
                 row._commandEntry = new Gtk.Entry({ text: '' }); // Dummy
             } else {
                 const commandEntry = new Gtk.Entry({
@@ -232,6 +260,10 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
         return group;
     }
 
+    /**
+     * Build the maintenance/debug group.
+     * Construye el grupo de mantenimiento/depuración.
+     */
     _buildMaintenanceGroup() {
         const group = new Adw.PreferencesGroup({
             title: _('Maintenance'),
@@ -254,14 +286,17 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
         return group;
     }
 
+    /**
+     * Import cookies from browser using local Python script.
+     * Importa cookies desde el navegador usando un script de Python local.
+     */
     async _importFromBrowser(providerId, tokenEntry) {
-        // Try to find the script in common installation paths
+        // Find the script path
         const homeDir = GLib.get_home_dir();
         const extensionDir = GLib.build_filenamev([GLib.get_user_data_dir(), 'gnome-shell', 'extensions', 'codexbar@inled.es']);
         const possiblePaths = [
             GLib.build_filenamev([extensionDir, 'cookie_importer.py']),
             GLib.build_filenamev([homeDir, '.local', 'share', 'gnome-shell', 'extensions', 'codexbar@inled.es', 'cookie_importer.py']),
-            '/home/jaime/Documentos/codexbar-gnome/cookie_importer.py'
         ];
         
         let scriptPath = null;
@@ -273,14 +308,12 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
         }
 
         if (!scriptPath) {
-            log(`CodexBar: Could not find cookie_importer.py in ${possiblePaths.join(', ')}`);
             return;
         }
         
         try {
-            log(`CodexBar: Running importer script at ${scriptPath}`);
-            
-            // [success, pid, stdin, stdout, stderr]
+            // Spawn Python script to extract cookies
+            // Lanzar script de Python para extraer cookies
             const [success, pid, stdin, stdout, stderr] = GLib.spawn_async_with_pipes(
                 null,
                 ['/usr/bin/python3', scriptPath],
@@ -289,44 +322,42 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
                 null
             );
 
-            if (!success) {
-                log('CodexBar: Failed to start importer process');
-                return;
-            }
+            if (!success) return;
 
-            // Close unused pipes
             GLib.close(stdin);
             GLib.close(stderr);
 
             const stdoutStream = new Gio.UnixInputStream({ fd: stdout, close_fd: true });
             const dataInputStream = new Gio.DataInputStream({ base_stream: stdoutStream });
             
-            // Read the output (it's one big JSON line)
             let [out, len] = dataInputStream.read_line(null);
             if (out) {
                 const outStr = new TextDecoder().decode(out);
                 const result = JSON.parse(outStr);
                 
                 if (result.error === 'DEPENDENCIES_MISSING') {
+                    // Help user install missing dependencies
+                    // Ayudar al usuario a instalar dependencias faltantes
                     const installCmd = `pkexec apt install python3-secretstorage python3-cryptography -y`;
                     GLib.spawn_command_line_async(installCmd);
-                } else if (result.error) {
-                    log(`CodexBar: Cookie import error: ${result.error}`);
                 } else if (result.cookie_header) {
                     tokenEntry.set_text(result.cookie_header);
                     storeToken(providerId, result.cookie_header);
-                    log('CodexBar: Successfully imported cookies');
                 }
             }
             
             stdoutStream.close(null);
             GLib.spawn_close_pid(pid);
         } catch (e) {
-            log(`CodexBar: Error in _importFromBrowser: ${e.message}`);
+            logError(e, 'CodexBar: Error in _importFromBrowser');
         }
     }
 });
 
+/**
+ * Main preferences entry point.
+ * Punto de entrada principal para las preferencias.
+ */
 export default class CodexBarPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();

@@ -8,14 +8,25 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { UsageApiClient } from './usageApi.js';
 import { loadToken } from './secret.js';
 
+/**
+ * Main extension class for CodexBar.
+ * Clase principal de la extensión para CodexBar.
+ */
 export default class CodexBarExtension extends Extension {
+    /**
+     * Called when the extension is enabled.
+     * Se llama cuando la extensión se activa.
+     */
     enable() {
         this._settings = this.getSettings();
         this._apiClient = new UsageApiClient();
         
-        // Use a more descriptive name for the indicator
+        // Main indicator button in the panel
+        // Botón indicador principal en el panel
         this._indicator = new PanelMenu.Button(0.0, _('CodexBar'), false);
         
+        // Icon container with progress fill
+        // Contenedor del icono con relleno de progreso
         this._iconBox = new St.BoxLayout({
             style_class: 'codexbar-panel-icon-box',
             vertical: false,
@@ -29,6 +40,8 @@ export default class CodexBarExtension extends Extension {
         this._iconBox.add_child(this._iconFill);
         this._indicator.add_child(this._iconBox);
 
+        // Header section of the popup menu
+        // Sección de cabecera del menú desplegable
         this._headerBox = new St.BoxLayout({
             style_class: 'codexbar-header',
             vertical: false,
@@ -63,12 +76,16 @@ export default class CodexBarExtension extends Extension {
         this._indicator.menu.box.add_child(this._headerBox);
         this._indicator.menu.box.add_style_class_name('codexbar-popup');
 
+        // Tabs for switching between different providers
+        // Pestañas para cambiar entre diferentes proveedores
         this._tabsContainer = new St.BoxLayout({
             style_class: 'codexbar-tabs-container',
             vertical: false,
         });
         this._indicator.menu.box.add_child(this._tabsContainer);
 
+        // Main content area for usage stats
+        // Área de contenido principal para las estadísticas de uso
         this._contentBox = new St.BoxLayout({
             vertical: true,
             style_class: 'codexbar-usage-section',
@@ -83,6 +100,7 @@ export default class CodexBarExtension extends Extension {
         this._cancellable = new Gio.Cancellable();
 
         // Standard signal handling
+        // Manejo estándar de señales
         this._signals = [];
         this._signals.push(this._settings.connect('changed::providers', () => this._onSettingsChanged()));
         this._signals.push(this._settings.connect('changed::refresh-interval', () => this._onSettingsChanged()));
@@ -92,48 +110,69 @@ export default class CodexBarExtension extends Extension {
         this._onSettingsChanged();
     }
 
+    /**
+     * Called when the extension is disabled.
+     * Se llama cuando la extensión se desactiva.
+     */
     disable() {
+        // Step 1: Clean up the API client
+        // Paso 1: Limpiar el cliente de la API
         if (this._apiClient) {
             this._apiClient.destroy();
             this._apiClient = null;
         }
 
-        // Cancel any pending subprocesses
+        // Step 2: Cancel any pending subprocesses or async operations
+        // Paso 2: Cancelar cualquier subproceso o operación asíncrona pendiente
         if (this._cancellable) {
             this._cancellable.cancel();
             this._cancellable = null;
         }
 
+        // Step 3: Remove timeouts
+        // Paso 3: Eliminar los timeouts
         if (this._timeoutId) {
             GLib.source_remove(this._timeoutId);
             this._timeoutId = null;
         }
 
+        // Step 4: Disconnect all settings signals
+        // Paso 4: Desconectar todas las señales de configuración
         if (this._settings) {
             this._signals.forEach(id => this._settings.disconnect(id));
             this._signals = [];
             this._settings = null;
         }
 
+        // Step 5: Destroy the indicator and all UI elements
+        // Paso 5: Destruir el indicador y todos los elementos de la interfaz
         if (this._indicator) {
             this._indicator.destroy();
             this._indicator = null;
         }
         
+        // Step 6: Nullify references to prevent memory leaks
+        // Paso 6: Anular referencias para prevenir fugas de memoria
         this._iconFill = null;
         this._iconBox = null;
         this._headerTitle = null;
         this._tabsContainer = null;
         this._contentBox = null;
+        this._headerBox = null;
+        this._providersData = [];
     }
 
+    /**
+     * Handle settings changes.
+     * Manejar cambios en la configuración.
+     */
     _onSettingsChanged() {
         const providersJson = this._settings.get_string('providers');
         try {
             this._providers = JSON.parse(providersJson);
         } catch (e) {
             this._providers = [];
-            logError(e, 'Failed to parse providers');
+            logError(e, 'CodexBar: Failed to parse providers');
         }
 
         if (this._activeProviderIndex >= this._providers.length) {
@@ -144,6 +183,10 @@ export default class CodexBarExtension extends Extension {
         this._setupTimeout();
     }
 
+    /**
+     * Set up the auto-refresh timer.
+     * Configura el temporizador de refresco automático.
+     */
     _setupTimeout() {
         if (this._timeoutId) {
             GLib.source_remove(this._timeoutId);
@@ -157,16 +200,24 @@ export default class CodexBarExtension extends Extension {
         }
     }
 
+    /**
+     * Refresh usage data for all enabled providers.
+     * Refrescar los datos de uso para todos los proveedores habilitados.
+     */
     async _refreshData() {
         if (this._loading || this._providers.length === 0) return;
         this._loading = true;
-        this._headerTitle.set_text(_('CodexBar (Refreshing...)'));
+        
+        if (this._headerTitle)
+            this._headerTitle.set_text(_('CodexBar (Refreshing...)'));
 
         this._providersData = [];
         
         for (let i = 0; i < this._providers.length; i++) {
             const provider = this._providers[i];
             
+            // Case 1: Provider uses Direct API (e.g. Codex)
+            // Caso 1: El proveedor usa la API directa (ej. Codex)
             if (provider.useApi) {
                 try {
                     const token = loadToken(provider.id);
@@ -178,6 +229,7 @@ export default class CodexBarExtension extends Extension {
                     const data = await this._apiClient.fetchSummary(token);
                     
                     // Generate dynamic labels based on window durations
+                    // Generar etiquetas dinámicas basadas en las duraciones de las ventanas
                     let apiLabels = [];
                     ['primary', 'secondary', 'tertiary', 'quaternary'].forEach(tier => {
                         const win = data.usage[tier];
@@ -199,7 +251,7 @@ export default class CodexBarExtension extends Extension {
                         labels: apiLabels,
                     };
                 } catch (error) {
-                    logError(error, `CodexBar API error for ${provider.name}`);
+                    logError(error, `CodexBar: API error for ${provider.name}`);
                     let msg = error.message;
                     if (!msg && error.toString) msg = error.toString();
                     if (!msg || msg === '[object Object]') msg = _('Unknown API error');
@@ -208,12 +260,15 @@ export default class CodexBarExtension extends Extension {
                 continue;
             }
 
+            // Case 2: Provider uses CLI command (external codexbar tool)
+            // Caso 2: El proveedor usa un comando CLI (herramienta codexbar externa)
             if (!provider.command) {
                 this._providersData[i] = { error: _('No command configured') };
                 continue;
             }
 
             try {
+                // Find executable path
                 let executable = '/home/linuxbrew/.linuxbrew/bin/codexbar';
                 const commonPaths = [
                     '/home/linuxbrew/.linuxbrew/bin/codexbar',
@@ -265,7 +320,8 @@ export default class CodexBarExtension extends Extension {
                     labels: [],
                 };
 
-                // Automatic label detection
+                // Automatic label detection for CLI providers
+                // Detección automática de etiquetas para proveedores CLI
                 try {
                     let discoveryCommand = finalCommand
                         .replace('--format json', '')
@@ -320,7 +376,7 @@ export default class CodexBarExtension extends Extension {
 
             } catch (error) {
                 if (this._cancellable && !this._cancellable.is_cancelled()) {
-                    logError(error, `CodexBar error running provider ${provider.name}`);
+                    logError(error, `CodexBar: error running provider ${provider.name}`);
                     this._providersData[i] = { error: error.message, command: provider.command };
                 }
             }
@@ -328,17 +384,26 @@ export default class CodexBarExtension extends Extension {
 
         if (this._cancellable && !this._cancellable.is_cancelled()) {
             this._loading = false;
-            this._headerTitle.set_text(_('CodexBar'));
+            if (this._headerTitle)
+                this._headerTitle.set_text(_('CodexBar'));
             this._updateUI();
         }
     }
 
+    /**
+     * Normalize percentage value.
+     * Normaliza el valor del porcentaje.
+     */
     _normalizePercent(value) {
         if (value === undefined || value === null) return 0;
         let p = parseFloat(value);
         return Math.min(100, Math.max(0, p));
     }
 
+    /**
+     * Update the indicator menu UI.
+     * Actualiza la interfaz del menú del indicador.
+     */
     _updateUI() {
         if (!this._indicator) return;
 
@@ -348,6 +413,8 @@ export default class CodexBarExtension extends Extension {
         const displayMode = this._settings.get_string('display-mode');
         const firstRun = this._settings.get_boolean('first-run');
         
+        // Check for codexbar CLI presence
+        // Comprobar la presencia de la CLI de codexbar
         let codexbarExists = false;
         const commonPaths = [
             '/home/linuxbrew/.linuxbrew/bin/codexbar',
@@ -367,9 +434,29 @@ export default class CodexBarExtension extends Extension {
             return;
         }
 
-        let totalFillWidth = 16;
-        let activePercent = 0;
+        // Recalculate active usage for the panel icon (average of all tiers)
+        // Recalcular el uso activo para el icono del panel (media de todos los niveles)
+        let totalPercent = 0;
+        let tierCount = 0;
 
+        const activeData = this._providersData[this._activeProviderIndex];
+        if (activeData && activeData.data && activeData.data.usage) {
+            const usage = activeData.data.usage;
+            const tiers = ['primary', 'secondary', 'tertiary', 'quaternary'];
+            
+            tiers.forEach(tier => {
+                if (usage[tier] && usage[tier].usedPercent !== undefined) {
+                    let p = this._normalizePercent(usage[tier].usedPercent);
+                    totalPercent += (displayMode === 'remaining') ? (100 - p) : p;
+                    tierCount++;
+                }
+            });
+        }
+
+        let activePercent = tierCount > 0 ? (totalPercent / tierCount) : 0;
+
+        // Create tab buttons
+        // Crear botones de pestaña
         this._providers.forEach((provider, index) => {
             let btn = new St.Button({
                 label: provider.name || _('Unknown'),
@@ -378,12 +465,6 @@ export default class CodexBarExtension extends Extension {
             });
             if (index === this._activeProviderIndex) {
                 btn.add_style_class_name('codexbar-tab-active');
-                
-                const activeData = this._providersData[index];
-                if (activeData && activeData.data && activeData.data.usage && activeData.data.usage.primary) {
-                    let p = this._normalizePercent(activeData.data.usage.primary.usedPercent);
-                    activePercent = (displayMode === 'remaining') ? (100 - p) : p;
-                }
             }
             btn.connect('clicked', () => {
                 this._activeProviderIndex = index;
@@ -393,18 +474,27 @@ export default class CodexBarExtension extends Extension {
         });
 
         // Apply fill to panel icon based on ACTIVE provider
-        const fillWidth = Math.round((activePercent / 100) * totalFillWidth);
-        this._iconFill.set_width(fillWidth);
-        
-        let color = '#eeeeee';
-        if (displayMode === 'remaining') {
-            if (activePercent < 10) color = '#e01b24';
-            else if (activePercent < 25) color = '#ff7800';
-        } else {
-            if (activePercent > 90) color = '#e01b24';
-            else if (activePercent > 75) color = '#ff7800';
+        // Aplicar relleno al icono del panel basado en el proveedor ACTIVO
+        if (this._iconFill) {
+            // Interior width of the box (20px - 2*1.5px border - 2*1px padding = 15px)
+            // Ancho interior de la caja (20px - 2*1.5px borde - 2*1px padding = 15px)
+            const totalFillWidth = 15;
+            const fillWidth = Math.max(0, Math.min(totalFillWidth, Math.round((activePercent / 100) * totalFillWidth)));
+            
+            let color = '#eeeeee';
+            if (displayMode === 'remaining') {
+                if (activePercent < 10) color = '#e01b24';
+                else if (activePercent < 25) color = '#ff7800';
+                else if (activePercent < 50) color = '#f6d32d';
+            } else {
+                if (activePercent > 90) color = '#e01b24';
+                else if (activePercent > 75) color = '#ff7800';
+                else if (activePercent > 50) color = '#f6d32d';
+            }
+            
+            this._iconFill.set_width(fillWidth);
+            this._iconFill.set_style(`background-color: ${color};`);
         }
-        this._iconFill.set_style(`background-color: ${color};`);
 
         if (this._providers.length === 0) {
             this._contentBox.add_child(new St.Label({ text: _('No providers configured. Click settings.') }));
@@ -412,13 +502,16 @@ export default class CodexBarExtension extends Extension {
         }
 
         const activeProvider = this._providers[this._activeProviderIndex];
-        const activeData = this._providersData[this._activeProviderIndex];
+        // Reuse activeData already declared above
+        // Reutilizar activeData ya declarada arriba
 
         if (!activeData) {
             this._contentBox.add_child(new St.Label({ text: _('Loading data...') }));
             return;
         }
 
+        // Show error if any
+        // Mostrar error si existe
         if (activeData.error) {
             let errorBox = new St.BoxLayout({ vertical: true, x_expand: true });
 
@@ -447,6 +540,8 @@ export default class CodexBarExtension extends Extension {
 
         const usage = data.usage;
 
+        // Account information
+        // Información de la cuenta
         if (usage.accountEmail) {
             let accountBox = new St.BoxLayout({ vertical: true, margin_bottom: 15 });
             accountBox.add_child(new St.Label({ text: activeProvider.name, style_class: 'codexbar-usage-title', style: 'font-size: 1.1em;' }));
@@ -462,6 +557,8 @@ export default class CodexBarExtension extends Extension {
             this._contentBox.add_child(accountBox);
         }
 
+        // Usage bars for each tier
+        // Barras de uso para cada nivel
         const tiers = ['primary', 'secondary', 'tertiary', 'quaternary'];
         const discoveredLabels = activeData.labels || [];
         
@@ -511,6 +608,10 @@ export default class CodexBarExtension extends Extension {
         });
     }
 
+    /**
+     * Show welcome screen for first-run or missing CLI.
+     * Muestra la pantalla de bienvenida para la primera ejecución o si falta la CLI.
+     */
     _showWelcomeScreen(codexbarExists) {
         let box = new St.BoxLayout({ vertical: true, x_expand: true, style: 'padding: 10px;' });
         

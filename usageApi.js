@@ -6,6 +6,10 @@ const API_BASE_URL = 'https://chatgpt.com';
 const SUMMARY_ENDPOINT = '/backend-api/wham/usage';
 const ME_ENDPOINT = '/backend-api/me';
 
+/**
+ * Custom error class for API related issues.
+ * Clase de error personalizada para problemas relacionados con la API.
+ */
 export class UsageApiError extends Error {
     constructor(message, {statusCode = 0, payload = null} = {}) {
         super(message);
@@ -19,6 +23,10 @@ export class UsageApiError extends Error {
     }
 }
 
+/**
+ * Client for fetching and parsing usage data from OpenAI/ChatGPT.
+ * Cliente para obtener y parsear datos de uso de OpenAI/ChatGPT.
+ */
 export class UsageApiClient {
     constructor() {
         this._session = new Soup.Session({
@@ -26,8 +34,13 @@ export class UsageApiClient {
         });
     }
 
+    /**
+     * Fetch usage summary from OpenAI API.
+     * Obtiene el resumen de uso desde la API de OpenAI.
+     */
     async fetchSummary(cookies) {
         // Step 1: Get the access token using the cookies
+        // Paso 1: Obtener el token de acceso usando las cookies
         let sessionData;
         try {
             sessionData = await this._getJson('/api/auth/session', cookies);
@@ -40,9 +53,11 @@ export class UsageApiClient {
         }
 
         // Step 2: Use the access token to fetch usage
+        // Paso 2: Usar el token de acceso para obtener el uso
         const usagePayload = await this._getJsonWithAuth(SUMMARY_ENDPOINT, sessionData.accessToken);
         
         // Step 3: Ensure we have an email (fallback to /me if missing from usage payload)
+        // Paso 3: Asegurar que tenemos un email (respaldo en /me si falta en el payload de uso)
         if (!usagePayload.email) {
             try {
                 const meData = await this._getJsonWithAuth(ME_ENDPOINT, sessionData.accessToken);
@@ -50,15 +65,23 @@ export class UsageApiClient {
                     usagePayload.email = meData.email;
                 }
             } catch (e) {
-                log(`CodexBar: Failed to fetch email from /me fallback: ${e.message}`);
+                // Silently fail email fallback
+                // Fallo silencioso del respaldo de email
             }
         }
 
         return this.normalizeSummary(usagePayload);
     }
 
+    /**
+     * Abort any pending requests and clean up session.
+     * Aborta cualquier petición pendiente y limpia la sesión.
+     */
     destroy() {
-        this._session.abort();
+        if (this._session) {
+            this._session.abort();
+            this._session = null;
+        }
     }
 
     async _getJson(path, cookies) {
@@ -107,10 +130,6 @@ export class UsageApiClient {
         const statusCode = message.get_status();
         const body = new TextDecoder().decode(bytes?.toArray?.() ?? bytes?.get_data?.() ?? []);
         
-        if (statusCode >= 400) {
-            log(`CodexBar: API Error ${statusCode} - Body: ${body}`);
-        }
-
         let payload = null;
         try {
             payload = body ? JSON.parse(body) : null;
@@ -131,18 +150,15 @@ export class UsageApiClient {
     }
 
 
+    /**
+     * Normalize the API payload into a unified structure.
+     * Normaliza el payload de la API en una estructura unificada.
+     */
     normalizeSummary(payload) {
-        // Log keys of the payload for debugging if no windows are found
         const windows = this.extractWindows(payload);
         
-        if (windows.length === 0) {
-            log(`CodexBar: No usage windows found in payload. Keys: ${Object.keys(payload).join(', ')}`);
-            log(`CodexBar: Full payload snippet: ${JSON.stringify(payload).substring(0, 1000)}`);
-            // Deep log of first level of rate_limit if it exists
-            if (payload.rate_limit) log(`CodexBar: rate_limit keys: ${Object.keys(payload.rate_limit).join(', ')}`);
-        }
-
-        // Sort by window size (smallest first, e.g. 3h before 24h)
+        // Sort by window size (smallest first)
+        // Ordenar por tamaño de ventana (más pequeña primero)
         const sorted = windows.sort((a, b) => (a.window_seconds || 0) - (b.window_seconds || 0));
         
         const formatReset = (seconds) => {
@@ -170,6 +186,10 @@ export class UsageApiClient {
         };
     }
 
+    /**
+     * Recursively extract usage windows from any JSON structure.
+     * Extrae recursivamente las ventanas de uso de cualquier estructura JSON.
+     */
     extractWindows(payload) {
         const windows = [];
         const seen = new Set();
@@ -178,27 +198,28 @@ export class UsageApiClient {
             if (!obj || typeof obj !== 'object' || seen.has(obj)) return;
             seen.add(obj);
             
-            // Support for used_percent directly (often found in Free/Basic plans)
+            // Support for used_percent directly (OpenAI Free plans)
+            // Soporte para used_percent directamente (planes gratuitos de OpenAI)
             if (obj.used_percent !== undefined) {
                 const percent = parseFloat(obj.used_percent) / 100;
                 if (!isNaN(percent)) {
                     windows.push({
-                        used: percent, // We don't have absolute numbers, so we use the ratio
+                        used: percent,
                         limit: 1,
                         percent: percent,
-                        window_seconds: obj.limit_window_seconds || obj.window_seconds || obj.duration_seconds || obj.duration || 0,
+                        window_seconds: obj.limit_window_seconds || obj.window_seconds || obj.duration_seconds || 0,
                         reset_after_seconds: obj.reset_after_seconds || obj.reset_after || 0
                     });
                 }
             }
 
             // Look for usage/limit pairs
-            // Usage variants: usage, used, count, current_usage, used_count, request_count
-            // Limit variants: limit, cap, max, max_usage, usage_limit, max_requests, total
-            let usedValue = obj.used ?? obj.usage ?? obj.count ?? obj.current_usage ?? obj.used_count ?? obj.request_count;
-            let limitValue = obj.limit ?? obj.cap ?? obj.max ?? obj.max_usage ?? obj.usage_limit ?? obj.max_requests ?? obj.total;
+            // Buscar pares de uso/límite
+            let usedValue = obj.used ?? obj.usage ?? obj.count ?? obj.current_usage;
+            let limitValue = obj.limit ?? obj.cap ?? obj.max ?? obj.usage_limit ?? obj.total;
             
-            // Special case: remaining and limit
+            // Handle 'remaining' + 'total' case
+            // Manejar caso de 'restante' + 'total'
             if (usedValue === undefined && obj.remaining !== undefined && limitValue !== undefined) {
                 usedValue = parseFloat(limitValue) - parseFloat(obj.remaining);
             }
@@ -212,13 +233,14 @@ export class UsageApiClient {
                         used: used,
                         limit: limit,
                         percent: used / limit,
-                        window_seconds: obj.window_seconds || obj.duration_seconds || obj.duration || 0,
-                        reset_after_seconds: obj.reset_after_seconds || obj.reset_after || 0
+                        window_seconds: obj.window_seconds || obj.duration_seconds || 0,
+                        reset_after_seconds: obj.reset_after_seconds || 0
                     });
                 }
             }
 
-            // Recurse
+            // Recurse into all keys
+            // Recorrer todas las claves
             for (const key in obj) {
                 collect(obj[key]);
             }
@@ -226,7 +248,8 @@ export class UsageApiClient {
         
         collect(payload);
         
-        // De-duplicate windows with same window_seconds and percent
+        // De-duplicate windows
+        // Eliminar ventanas duplicadas
         return windows.filter((w, index, self) => 
             index === self.findIndex((t) => (
                 t.window_seconds === w.window_seconds && t.percent === w.percent
