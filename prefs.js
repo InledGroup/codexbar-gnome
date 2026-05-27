@@ -12,6 +12,7 @@ import { storeToken, loadToken, clearToken } from './secret.js';
  */
 const PREDEFINED_PROVIDERS = [
     { id: 'codex', name: 'Codex', useApi: true, defaultCommand: '' },
+    { id: 'claude', name: 'Claude', useApi: false, defaultCommand: 'codexbar --provider claude --source cli --format json' },
     { id: 'gemini', name: 'Gemini', useApi: false, defaultCommand: 'codexbar --provider gemini --source api --format json' },
     { id: 'deepseek', name: 'DeepSeek', useApi: false, defaultCommand: 'codexbar --provider deepseek --source api --format json' },
     { id: 'copilot', name: 'Copilot', useApi: false, defaultCommand: 'codexbar --provider copilot --source api --format json' },
