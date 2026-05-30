@@ -155,12 +155,6 @@ export class UsageApiClient {
      * Normaliza el payload de la API en una estructura unificada.
      */
     normalizeSummary(payload) {
-        const windows = this.extractWindows(payload);
-        
-        // Sort by window size (smallest first)
-        // Ordenar por tamaño de ventana (más pequeña primero)
-        const sorted = windows.sort((a, b) => (a.window_seconds || 0) - (b.window_seconds || 0));
-        
         const formatReset = (seconds) => {
             if (!seconds || seconds <= 0) return '';
             const resetDate = new Date(Date.now() + seconds * 1000);
@@ -176,6 +170,57 @@ export class UsageApiClient {
             return `Resets at ${timeStr} (in ${hours}h)`;
         };
 
+        const mapSingle = (obj) => {
+            if (!obj || typeof obj !== 'object') return null;
+            
+            let usedPercent = obj.usedPercent;
+            let resetSecs = obj.reset_after_seconds ?? obj.reset_after ?? obj.reset_in_seconds ?? obj.reset_time;
+            
+            // Try to extract if usedPercent is missing
+            if (usedPercent === undefined) {
+                let used = obj.used ?? obj.usage ?? obj.count ?? obj.current_usage ?? obj.totalUsage ?? obj.keyUsage;
+                let limit = obj.limit ?? obj.cap ?? obj.max ?? obj.usage_limit ?? obj.total ?? obj.totalCredits;
+                
+                if (used === undefined && obj.remaining !== undefined && limit !== undefined) {
+                    used = parseFloat(limit) - parseFloat(obj.remaining);
+                }
+                
+                if (used !== undefined && limit !== undefined && limit > 0) {
+                    usedPercent = (parseFloat(used) / parseFloat(limit)) * 100;
+                } else if (obj.used_percent !== undefined || obj.usedPercent !== undefined) {
+                    usedPercent = parseFloat(obj.used_percent ?? obj.usedPercent);
+                    if (usedPercent <= 1.0) usedPercent *= 100;
+                }
+            }
+
+            if (usedPercent === undefined) return null;
+
+            return {
+                usedPercent: usedPercent,
+                resetDescription: formatReset(resetSecs) || obj.resetDescription || '',
+                windowSeconds: obj.window_seconds || (obj.windowMinutes ? obj.windowMinutes * 60 : 0)
+            };
+        };
+
+        // If it already has structured tiers, normalize them in place to keep order
+        if (payload.primary || payload.secondary || payload.tertiary) {
+            return {
+                usage: {
+                    ...payload,
+                    accountEmail: payload?.accountEmail || payload?.email || 'API User',
+                    updatedAt: payload?.updatedAt || new Date().toISOString(),
+                    primary: mapSingle(payload.primary),
+                    secondary: mapSingle(payload.secondary),
+                    tertiary: mapSingle(payload.tertiary),
+                    quaternary: mapSingle(payload.quaternary),
+                }
+            };
+        }
+
+        // Otherwise, fall back to recursive extraction
+        const windows = this.extractWindows(payload);
+        const sorted = windows.sort((a, b) => (a.window_seconds || 0) - (b.window_seconds || 0));
+        
         const mapWindow = (w, existing) => w ? {
             usedPercent: w.percent * 100,
             resetDescription: formatReset(w.reset_after_seconds) || existing?.resetDescription || '',
