@@ -35,14 +35,44 @@ const testCases = [
         data: {
             "used_percent": 45.5,
             "limit_window_seconds": 3600
-        }
+        },
+        expectedUsedPercent: 45.5
+    },
+    {
+        name: "Codex rate_limit windows (1% used)",
+        data: {
+            "rate_limit": {
+                "primary_window": {
+                    "used_percent": 1,
+                    "limit_window_seconds": 18000,
+                    "reset_after_seconds": 7200
+                },
+                "secondary_window": {
+                    "used_percent": 12,
+                    "limit_window_seconds": 604800,
+                    "reset_after_seconds": 432000
+                }
+            }
+        },
+        expectedUsedPercent: 1
+    },
+    {
+        name: "Codex remaining_percent",
+        data: {
+            "primary": {
+                "remaining_percent": 99,
+                "limit_window_seconds": 18000
+            }
+        },
+        expectedUsedPercent: 1
     },
     {
         name: "Generic CLI (remaining/total)",
         data: {
             "remaining": 5,
             "total": 20
-        }
+        },
+        expectedUsedPercent: 75
     }
 ];
 
@@ -57,6 +87,11 @@ testCases.forEach(test => {
         if (primary) {
             console.log(`  ✓ Success: ${primary.usedPercent.toFixed(2)}% used`);
             if (primary.resetDescription) console.log(`  └─ Reset: ${primary.resetDescription}`);
+
+            if (test.expectedUsedPercent !== undefined &&
+                Math.abs(primary.usedPercent - test.expectedUsedPercent) > 0.0001) {
+                throw new Error(`Expected ${test.expectedUsedPercent}% used, got ${primary.usedPercent}%`);
+            }
         } else {
             console.log("  ✗ Failed: No primary window found");
         }

@@ -247,37 +247,51 @@ export class UsageApiClient {
     extractWindows(payload) {
         const windows = [];
         const seen = new Set();
+        const canonicalWindows = [];
 
-        const collect = (obj) => {
-            if (!obj || typeof obj !== 'object' || seen.has(obj)) return;
-            seen.add(obj);
-            
-            // Support for used_percent / usedPercent directly
-            // Soporte para used_percent / usedPercent directamente
-            const rawPercent = obj.used_percent ?? obj.usedPercent;
-            if (rawPercent !== undefined) {
-                let percent = parseFloat(rawPercent);
-                if (!isNaN(percent)) {
-                    // If > 1, assume it's 0-100 scale
-                    if (percent > 1.0) percent = percent / 100;
+        const normalizePercentValue = (rawPercent, mode = 'used') => {
+            let percent = parseFloat(rawPercent);
+            if (isNaN(percent)) return null;
+            percent = percent / 100;
+            if (mode === 'remaining') percent = 1 - percent;
+            return Math.min(1, Math.max(0, percent));
+        };
 
-                    windows.push({
+        const makeWindow = (obj) => {
+            if (!obj || typeof obj !== 'object') return null;
+
+            const rawUsedPercent = obj.used_percent ?? obj.usedPercent;
+            if (rawUsedPercent !== undefined) {
+                const percent = normalizePercentValue(rawUsedPercent, 'used');
+                if (percent !== null) {
+                    return {
                         used: percent,
                         limit: 1,
-                        percent: percent,
+                        percent,
                         window_seconds: obj.limit_window_seconds || obj.window_seconds || obj.duration_seconds || 0,
                         reset_after_seconds: obj.reset_after_seconds || obj.reset_after || 0
-                    });
+                    };
                 }
             }
 
-            // Look for usage/limit pairs
-            // Buscar pares de uso/límite
+            const rawRemainingPercent =
+                obj.remaining_percent ?? obj.remainingPercent ?? obj.percent_remaining ?? obj.percentRemaining;
+            if (rawRemainingPercent !== undefined) {
+                const percent = normalizePercentValue(rawRemainingPercent, 'remaining');
+                if (percent !== null) {
+                    return {
+                        used: percent,
+                        limit: 1,
+                        percent,
+                        window_seconds: obj.limit_window_seconds || obj.window_seconds || obj.duration_seconds || 0,
+                        reset_after_seconds: obj.reset_after_seconds || obj.reset_after || 0
+                    };
+                }
+            }
+
             let usedValue = obj.used ?? obj.usage ?? obj.count ?? obj.current_usage ?? obj.totalUsage ?? obj.keyUsage;
             let limitValue = obj.limit ?? obj.cap ?? obj.max ?? obj.usage_limit ?? obj.total ?? obj.totalCredits;
             
-            // Handle 'remaining' + 'total' case
-            // Manejar caso de 'restante' + 'total'
             if (usedValue === undefined && obj.remaining !== undefined && limitValue !== undefined) {
                 usedValue = parseFloat(limitValue) - parseFloat(obj.remaining);
             }
@@ -287,15 +301,57 @@ export class UsageApiClient {
                 const limit = parseFloat(limitValue);
                 
                 if (!isNaN(used) && !isNaN(limit) && limit > 0) {
-                    windows.push({
-                        used: used,
-                        limit: limit,
-                        percent: used / limit,
-                        window_seconds: obj.window_seconds || obj.duration_seconds || 0,
+                    return {
+                        used,
+                        limit,
+                        percent: Math.min(1, Math.max(0, used / limit)),
+                        window_seconds: obj.limit_window_seconds || obj.window_seconds || obj.duration_seconds || 0,
                         reset_after_seconds: obj.reset_after_seconds || obj.reset_after || 0
-                    });
+                    };
                 }
             }
+
+            return null;
+        };
+
+        const addWindow = (target, win) => {
+            if (win) target.push(win);
+        };
+
+        const rateLimit = payload?.rate_limit || payload?.usage?.rate_limit;
+        if (rateLimit) {
+            [
+                'primary_window',
+                'secondary_window',
+                'tertiary_window',
+                'quaternary_window',
+                'primary',
+                'secondary',
+                'tertiary',
+                'quaternary',
+            ].forEach((key) => addWindow(canonicalWindows, makeWindow(rateLimit[key])));
+        }
+
+        ['primary', 'secondary', 'tertiary', 'quaternary'].forEach((key) =>
+            addWindow(canonicalWindows, makeWindow(payload?.[key] || payload?.usage?.[key]))
+        );
+
+        const dedupe = (items) => items.filter((w, index, self) =>
+            index === self.findIndex((t) => (
+                t.window_seconds === w.window_seconds &&
+                Math.abs(t.percent - w.percent) < 0.0001
+            ))
+        );
+
+        if (canonicalWindows.length > 0) {
+            return dedupe(canonicalWindows);
+        }
+
+        const collect = (obj) => {
+            if (!obj || typeof obj !== 'object' || seen.has(obj)) return;
+            seen.add(obj);
+
+            addWindow(windows, makeWindow(obj));
 
             // Recurse into all keys
             // Recorrer todas las claves
@@ -308,11 +364,6 @@ export class UsageApiClient {
         
         // De-duplicate windows
         // Eliminar ventanas duplicadas
-        return windows.filter((w, index, self) => 
-            index === self.findIndex((t) => (
-                t.window_seconds === w.window_seconds && 
-                Math.abs(t.percent - w.percent) < 0.0001
-            ))
-        );
+        return dedupe(windows);
     }
 }
