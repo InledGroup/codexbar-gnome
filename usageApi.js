@@ -103,6 +103,34 @@ const dedupe = (items) => items.filter((w, index, self) =>
     ))
 );
 
+export const formatResetDescription = (seconds, windowSeconds, now = new Date()) => {
+    if (!seconds || seconds <= 0) return '';
+
+    const resetDate = new Date(now.getTime() + seconds * 1000);
+    const isSameDay =
+        resetDate.getFullYear() === now.getFullYear() &&
+        resetDate.getMonth() === now.getMonth() &&
+        resetDate.getDate() === now.getDate();
+    const showDate = windowSeconds >= 7 * 24 * 3600 && !isSameDay;
+    const resetStr = showDate
+        ? resetDate.toLocaleString([], {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        })
+        : resetDate.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+    if (seconds < 3600) {
+        return `Resets at ${resetStr} (in ${Math.round(seconds / 60)}m)`;
+    }
+    const hours = Math.round(seconds / 3600);
+    return `Resets at ${resetStr} (in ${hours}h)`;
+};
+
 export class UsageApiClient {
     constructor() {
         this._session = new Soup.Session({
@@ -231,28 +259,16 @@ export class UsageApiClient {
      * Normaliza el payload de la API en una estructura unificada.
      */
     normalizeSummary(payload) {
-        const formatReset = (seconds) => {
-            if (!seconds || seconds <= 0) return '';
-            const resetDate = new Date(Date.now() + seconds * 1000);
-            const timeStr = resetDate.toLocaleTimeString([], { 
-                hour: '2-digit', 
-                minute: '2-digit' 
-            });
-            
-            if (seconds < 3600) {
-                return `Resets at ${timeStr} (in ${Math.round(seconds / 60)}m)`;
-            }
-            const hours = Math.round(seconds / 3600);
-            return `Resets at ${timeStr} (in ${hours}h)`;
-        };
-
         const mapSingle = (obj) => {
             const win = makeWindow(obj);
             if (!win) return null;
 
             return {
                 usedPercent: win.percent * 100,
-                resetDescription: formatReset(win.reset_after_seconds) || obj.resetDescription || '',
+                resetDescription: formatResetDescription(
+                    win.reset_after_seconds,
+                    win.window_seconds
+                ) || obj.resetDescription || '',
                 windowSeconds: win.window_seconds
             };
         };
@@ -278,7 +294,10 @@ export class UsageApiClient {
         
         const mapWindow = (w, existing) => w ? {
             usedPercent: w.percent * 100,
-            resetDescription: formatReset(w.reset_after_seconds) || existing?.resetDescription || '',
+            resetDescription: formatResetDescription(
+                w.reset_after_seconds,
+                w.window_seconds
+            ) || existing?.resetDescription || '',
             windowSeconds: w.window_seconds
         } : null;
 
