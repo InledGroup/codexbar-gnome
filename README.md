@@ -2,12 +2,12 @@
 
 A GNOME Shell extension to monitor AI provider usage metrics directly from the system panel. This extension acts as a graphical interface for the CodexBar CLI, providing real-time visibility into your API quotas and usage tiers.
 
-![CodexBar Panel](<codexbar for gnome.png>)
+![CodexBar Panel](<demo.gif>)
 
 ## Features
 
 - Real-time monitoring of AI provider usage (Gemini, OpenAI, etc).
-- Support for multiple usage tiers (Primary, Secondary, Tertiary).
+- Support for multiple usage tiers
 - Toggle between Remaining Quota and Used Quota display modes.
 - Automatic background refreshes with configurable intervals.
 - Visual warnings (color changes) when reaching quota limits.
@@ -70,4 +70,4 @@ Detailed setup guides and troubleshooting information can be found at [help.inle
 
 ## License
 
-This project is licensed under the terms of the MIT-INLED license. Contributions are welcome!
+This project is licensed under the terms of the MIT license. Contributions are welcome!
