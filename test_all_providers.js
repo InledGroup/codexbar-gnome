@@ -1,5 +1,5 @@
 
-import { UsageApiClient } from './usageApi.js';
+import { formatResetDescription, UsageApiClient } from './usageApi.js';
 
 const client = new UsageApiClient();
 
@@ -100,3 +100,26 @@ testCases.forEach(test => {
     }
     console.log("");
 });
+
+const now = new Date(2026, 5, 14, 10, 0);
+const sameDayWeeklyReset = formatResetDescription(2 * 3600, 7 * 24 * 3600, now);
+const laterWeeklyReset = formatResetDescription(2 * 24 * 3600, 7 * 24 * 3600, now);
+const sameDayTime = new Date(2026, 5, 14, 12, 0).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit'
+});
+const laterDateTime = new Date(2026, 5, 16, 10, 0).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+});
+
+if (sameDayWeeklyReset !== `Resets at ${sameDayTime} (in 2h)`) {
+    throw new Error(`Same-day weekly reset should omit the date: ${sameDayWeeklyReset}`);
+}
+if (laterWeeklyReset !== `Resets at ${laterDateTime} (in 48h)`) {
+    throw new Error(`Later weekly reset should include the date: ${laterWeeklyReset}`);
+}
+
+console.log("✓ Weekly reset dates are shown only when the reset is on another day");
