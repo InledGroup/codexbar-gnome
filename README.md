@@ -13,6 +13,10 @@ A GNOME Shell extension to monitor AI provider usage metrics directly from the s
 - Visual warnings (color changes) when reaching quota limits.
 - Automatic resolution of CodexBar CLI paths (Homebrew supported).
 
+## Updates  
+> [!NOTE]
+> Now added support for Antigravity CLI, the replacement of Gemini CLI for individual customers
+
 ## Requirements
 
 The extension requires the CodexBar CLI tool installed on your system.
