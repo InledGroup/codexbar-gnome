@@ -1,197 +1,215 @@
-
-import { formatResetDescription, UsageApiClient } from './usageApi.js';
+import { formatResetDescription, UsageApiClient } from "./usageApi.js";
 
 const client = new UsageApiClient();
 
 const testCases = [
-    {
-        name: "OpenRouter (User reported)",
-        data: {
-            "loginMethod": "Balance: $35.05",
-            "openRouterUsage": {
-                "balance": 35.05187273999999,
-                "totalCredits": 160,
-                "totalUsage": 124.94812726,
-                "usedPercent": 78.0925795375
-            }
-        }
+  {
+    name: "OpenRouter (User reported)",
+    data: {
+      loginMethod: "Balance: $35.05",
+      openRouterUsage: {
+        balance: 35.05187273999999,
+        totalCredits: 160,
+        totalUsage: 124.94812726,
+        usedPercent: 78.0925795375,
+      },
     },
-    {
-        name: "OpenAI / Codex (Standard)",
-        data: {
-            "email": "user@example.com",
-            "usage": [
-                {
-                    "used": 10,
-                    "limit": 50,
-                    "window_seconds": 10800,
-                    "reset_after_seconds": 3600
-                }
-            ]
-        }
-    },
-    {
-        name: "OpenAI Free (used_percent)",
-        data: {
-            "used_percent": 45.5,
-            "limit_window_seconds": 3600
+  },
+  {
+    name: "OpenAI / Codex (Standard)",
+    data: {
+      email: "user@example.com",
+      usage: [
+        {
+          used: 10,
+          limit: 50,
+          window_seconds: 10800,
+          reset_after_seconds: 3600,
         },
-        expectedUsedPercent: 45.5
+      ],
     },
-    {
-        name: "Codex rate_limit windows (1% used)",
-        data: {
-            "rate_limit": {
-                "primary_window": {
-                    "used_percent": 1,
-                    "limit_window_seconds": 18000,
-                    "reset_after_seconds": 7200
-                },
-                "secondary_window": {
-                    "used_percent": 12,
-                    "limit_window_seconds": 604800,
-                    "reset_after_seconds": 432000
-                }
-            }
-        },
-        expectedUsedPercent: 1
+  },
+  {
+    name: "OpenAI Free (used_percent)",
+    data: {
+      used_percent: 45.5,
+      limit_window_seconds: 3600,
     },
-    {
-        name: "Codex remaining_percent",
-        data: {
-            "primary": {
-                "remaining_percent": 99,
-                "limit_window_seconds": 18000
-            }
+    expectedUsedPercent: 45.5,
+  },
+  {
+    name: "Codex rate_limit windows (1% used)",
+    data: {
+      rate_limit: {
+        primary_window: {
+          used_percent: 1,
+          limit_window_seconds: 18000,
+          reset_after_seconds: 7200,
         },
-        expectedUsedPercent: 1
+        secondary_window: {
+          used_percent: 12,
+          limit_window_seconds: 604800,
+          reset_after_seconds: 432000,
+        },
+      },
     },
-    {
-        name: "Generic CLI (remaining/total)",
-        data: {
-            "remaining": 5,
-            "total": 20
-        },
-        expectedUsedPercent: 75
+    expectedUsedPercent: 1,
+  },
+  {
+    name: "Codex remaining_percent",
+    data: {
+      primary: {
+        remaining_percent: 99,
+        limit_window_seconds: 18000,
+      },
     },
-    {
-        name: "Antigravity (User reported)",
-        data: {
-            "provider": "antigravity",
-            "source": "cli",
-            "usage": {
-                "primary": {
-                    "usedPercent": 0.42785999999999547,
-                    "windowMinutes": 300,
-                    "resetsAt": "2026-06-19T12:39:05Z",
-                    "resetDescription": "You have used some of your 5-hour limit, it will fully refresh in 4 hours, 59 minutes."
-                },
-                "identity": {
-                    "accountEmail": "user@example.com",
-                    "loginMethod": "Google AI Pro",
-                    "providerID": "antigravity"
-                },
-                "extraRateWindows": [
-                    {
-                        "title": "Gemini Session",
-                        "id": "antigravity-quota-summary-gemini-5h",
-                        "window": {
-                            "resetsAt": "2026-06-19T12:39:05Z",
-                            "windowMinutes": 300,
-                            "usedPercent": 0.42785999999999547,
-                            "resetDescription": "You have used some of your 5-hour limit, it will fully refresh in 4 hours, 59 minutes."
-                        }
-                    },
-                    {
-                        "title": "Gemini Weekly",
-                        "id": "antigravity-quota-summary-gemini-weekly",
-                        "window": {
-                            "resetsAt": "2026-06-26T07:39:05Z",
-                            "windowMinutes": 10080,
-                            "usedPercent": 0.07130499999999529,
-                            "resetDescription": "You have used some of your weekly limit, it will fully refresh in 6 days, 23 hours."
-                        }
-                    },
-                    {
-                        "title": "Claude + GPT Session",
-                        "id": "antigravity-quota-summary-3p-5h",
-                        "window": {
-                            "usedPercent": 0,
-                            "resetsAt": "2026-06-19T12:39:33Z",
-                            "windowMinutes": 300
-                        }
-                    },
-                    {
-                        "title": "Claude + GPT Weekly",
-                        "id": "antigravity-quota-summary-3p-weekly",
-                        "window": {
-                            "resetsAt": "2026-06-26T07:39:33Z",
-                            "windowMinutes": 10080,
-                            "usedPercent": 0
-                        }
-                    }
-                ],
-                "accountEmail": "user@example.com",
-                "updatedAt": "2026-06-19T07:39:33Z",
-                "tertiary": null,
-                "secondary": {
-                    "usedPercent": 0,
-                    "windowMinutes": 300,
-                    "resetsAt": "2026-06-19T12:39:33Z"
-                },
-                "loginMethod": "Google AI Pro"
-            }
+    expectedUsedPercent: 1,
+  },
+  {
+    name: "Generic CLI (remaining/total)",
+    data: {
+      remaining: 5,
+      total: 20,
+    },
+    expectedUsedPercent: 75,
+  },
+  {
+    name: "Antigravity (User reported)",
+    data: {
+      provider: "antigravity",
+      source: "cli",
+      usage: {
+        primary: {
+          usedPercent: 0.42785999999999547,
+          windowMinutes: 300,
+          resetsAt: "2026-06-19T12:39:05Z",
+          resetDescription:
+            "You have used some of your 5-hour limit, it will fully refresh in 4 hours, 59 minutes.",
         },
-        expectedUsedPercent: 0.42786
-    }
+        identity: {
+          accountEmail: "user@example.com",
+          loginMethod: "Google AI Pro",
+          providerID: "antigravity",
+        },
+        extraRateWindows: [
+          {
+            title: "Gemini Session",
+            id: "antigravity-quota-summary-gemini-5h",
+            window: {
+              resetsAt: "2026-06-19T12:39:05Z",
+              windowMinutes: 300,
+              usedPercent: 0.42785999999999547,
+              resetDescription:
+                "You have used some of your 5-hour limit, it will fully refresh in 4 hours, 59 minutes.",
+            },
+          },
+          {
+            title: "Gemini Weekly",
+            id: "antigravity-quota-summary-gemini-weekly",
+            window: {
+              resetsAt: "2026-06-26T07:39:05Z",
+              windowMinutes: 10080,
+              usedPercent: 0.07130499999999529,
+              resetDescription:
+                "You have used some of your weekly limit, it will fully refresh in 6 days, 23 hours.",
+            },
+          },
+          {
+            title: "Claude + GPT Session",
+            id: "antigravity-quota-summary-3p-5h",
+            window: {
+              usedPercent: 0,
+              resetsAt: "2026-06-19T12:39:33Z",
+              windowMinutes: 300,
+            },
+          },
+          {
+            title: "Claude + GPT Weekly",
+            id: "antigravity-quota-summary-3p-weekly",
+            window: {
+              resetsAt: "2026-06-26T07:39:33Z",
+              windowMinutes: 10080,
+              usedPercent: 0,
+            },
+          },
+        ],
+        accountEmail: "user@example.com",
+        updatedAt: "2026-06-19T07:39:33Z",
+        tertiary: null,
+        secondary: {
+          usedPercent: 0,
+          windowMinutes: 300,
+          resetsAt: "2026-06-19T12:39:33Z",
+        },
+        loginMethod: "Google AI Pro",
+      },
+    },
+    expectedUsedPercent: 0.42786,
+  },
 ];
 
 console.log("--- Testing normalizeSummary for multiple formats ---\n");
 
-testCases.forEach(test => {
-    console.log(`Testing: ${test.name}`);
-    try {
-        const payload = test.data.usage || test.data;
-        const isAntigravity = test.name.includes("Antigravity") || test.data.provider === "antigravity";
-        const normalized = client.normalizeSummary(payload, isAntigravity);
-        const primary = normalized.usage.primary;
-        
-        if (primary) {
-            console.log(`  ✓ Success: ${primary.usedPercent.toFixed(2)}% used`);
-            if (primary.resetDescription) console.log(`  └─ Reset: ${primary.resetDescription}`);
+testCases.forEach((test) => {
+  console.log(`Testing: ${test.name}`);
+  try {
+    const payload = test.data.usage || test.data;
+    const isAntigravity =
+      test.name.includes("Antigravity") || test.data.provider === "antigravity";
+    const normalized = client.normalizeSummary(payload, isAntigravity);
+    const primary = normalized.usage.primary;
 
-            if (test.expectedUsedPercent !== undefined &&
-                Math.abs(primary.usedPercent - test.expectedUsedPercent) > 0.0001) {
-                throw new Error(`Expected ${test.expectedUsedPercent}% used, got ${primary.usedPercent}%`);
-            }
-        } else {
-            console.log("  ✗ Failed: No primary window found");
-        }
-    } catch (e) {
-        console.log(`  ✗ Error: ${e.message}`);
+    if (primary) {
+      console.log(`  ✓ Success: ${primary.usedPercent.toFixed(2)}% used`);
+      if (primary.resetDescription)
+        console.log(`  └─ Reset: ${primary.resetDescription}`);
+
+      if (
+        test.expectedUsedPercent !== undefined &&
+        Math.abs(primary.usedPercent - test.expectedUsedPercent) > 0.0001
+      ) {
+        throw new Error(
+          `Expected ${test.expectedUsedPercent}% used, got ${primary.usedPercent}%`,
+        );
+      }
+    } else {
+      console.log("  ✗ Failed: No primary window found");
     }
-    console.log("");
+  } catch (e) {
+    console.log(`  ✗ Error: ${e.message}`);
+  }
+  console.log("");
 });
 
 const now = new Date(2026, 5, 14, 10, 0);
 const sameDayWeeklyReset = formatResetDescription(2 * 3600, 7 * 24 * 3600, now);
-const laterWeeklyReset = formatResetDescription(2 * 24 * 3600, 7 * 24 * 3600, now);
+const laterWeeklyReset = formatResetDescription(
+  2 * 24 * 3600,
+  7 * 24 * 3600,
+  now,
+);
 const sameDayTime = new Date(2026, 5, 14, 12, 0).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit'
+  hour: "2-digit",
+  minute: "2-digit",
 });
 const laterDateTime = new Date(2026, 5, 16, 10, 0).toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
 });
 
 if (sameDayWeeklyReset !== `Resets at ${sameDayTime} (in 2h)`) {
-    throw new Error(`Same-day weekly reset should omit the date: ${sameDayWeeklyReset}`);
+  throw new Error(
+    `Same-day weekly reset should omit the date: ${sameDayWeeklyReset}`,
+  );
 }
 if (laterWeeklyReset !== `Resets at ${laterDateTime} (in 48h)`) {
-    throw new Error(`Later weekly reset should include the date: ${laterWeeklyReset}`);
+  throw new Error(
+    `Later weekly reset should include the date: ${laterWeeklyReset}`,
+  );
 }
 
-console.log("✓ Weekly reset dates are shown only when the reset is on another day");
+console.log(
+  "✓ Weekly reset dates are shown only when the reset is on another day",
+);

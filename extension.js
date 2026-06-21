@@ -9,7 +9,7 @@ import {
 import * as PanelMenu from "resource:///org/gnome/shell/ui/panelMenu.js";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import { UsageApiClient } from "./usageApi.js";
-import { loadToken } from "./secret.js";
+import { loadToken, nullTokenSchema } from "./secret.js";
 
 /**
  * Main extension class for CodexBar.
@@ -199,6 +199,11 @@ export default class CodexBarExtension extends Extension {
     // Step 6: Nullify remaining references to prevent memory leaks
     // Paso 6: Anular referencias restantes para prevenir fugas de memoria
     this._providersData = [];
+    this._activeProviderIndex = 0;
+
+    // Step 7: Release schema references to prevent memory leaks
+    // Paso 7: Liberar referencias de esquemas para prevenir fugas de memoria
+    nullTokenSchema();
   }
 
   /**

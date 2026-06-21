@@ -58,3 +58,13 @@ export function clearToken(providerId) {
         return false;
     }
 }
+
+/**
+ * Release the token schema reference and clear the fallback cache to prevent memory leaks on disable.
+ * Libera la referencia del esquema del token y limpia la caché de respaldo para evitar fugas de memoria al desactivar.
+ */
+export function nullTokenSchema() {
+    _tokenSchema = null;
+    _fallbackCache.clear();
+}
+

@@ -5,7 +5,7 @@ import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk';
 import Adw from 'gi://Adw';
 import { ExtensionPreferences, gettext as _ } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
-import { storeToken, loadToken, clearToken } from './secret.js';
+import { storeToken, loadToken, clearToken, nullTokenSchema } from './secret.js';
 
 /**
  * Predefined providers list.
@@ -42,6 +42,11 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
         this.add(this._buildProvidersGroup());
         this.add(this._buildContributeGroup());
         this.add(this._buildMaintenanceGroup());
+
+        this.connect('destroy', () => {
+            this._settings = null;
+            this._providerRows = [];
+        });
     }
 
     /**
@@ -635,6 +640,13 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
 export default class CodexBarPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
-        window.add(new CodexBarPrefsPage(settings));
+        const page = new CodexBarPrefsPage(settings);
+        window.add(page);
+
+        // Null out token schema when preferences window is closed
+        // Anular el esquema del token cuando se cierre la ventana de preferencias
+        window.connect('destroy', () => {
+            nullTokenSchema();
+        });
     }
 }
