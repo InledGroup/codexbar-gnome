@@ -19,3 +19,5 @@ Thumbs.db
 erropenai.txt
 
 venv/
+__pycache__/
+cookie_importer_package/dist/

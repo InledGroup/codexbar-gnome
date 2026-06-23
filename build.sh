@@ -12,7 +12,6 @@ gnome-extensions pack \
     --extra-source=prefs.js \
     --extra-source=usageApi.js \
     --extra-source=secret.js \
-    --extra-source=cookie_importer.py \
     --extra-source=stylesheet.css \
     --extra-source=media/ \
     --schema=schemas/org.gnome.shell.extensions.codexbar.gschema.xml \

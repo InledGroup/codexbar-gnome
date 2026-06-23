@@ -1,0 +1,2 @@
+secretstorage>=3.3.0
+cryptography>=3.0.0

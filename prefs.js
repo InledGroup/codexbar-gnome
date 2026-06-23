@@ -522,22 +522,6 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
             if (callback) callback();
         };
 
-        // Find the script path
-        const homeDir = GLib.get_home_dir();
-        const extensionDir = GLib.build_filenamev([GLib.get_user_data_dir(), 'gnome-shell', 'extensions', 'codexbar@inled.es']);
-        const possiblePaths = [
-            GLib.build_filenamev([extensionDir, 'cookie_importer.py']),
-            GLib.build_filenamev([homeDir, '.local', 'share', 'gnome-shell', 'extensions', 'codexbar@inled.es', 'cookie_importer.py']),
-        ];
-        
-        let scriptPath = null;
-        for (const p of possiblePaths) {
-            if (GLib.file_test(p, GLib.FileTest.EXISTS)) {
-                scriptPath = p;
-                break;
-            }
-        }
-
         const showError = (title, message) => {
             const dialog = new Adw.MessageDialog({
                 heading: title,
@@ -550,14 +534,36 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
             finish();
         };
 
-        if (!scriptPath) {
-            showError(_('Error'), _('Cookie importer script not found. Please reinstall the extension.'));
-            return;
+        const showMissingDialog = () => {
+            const dialog = new Adw.MessageDialog({
+                heading: _('Cookie Importer Missing'),
+                body: _('To import cookies automatically from your browser, please install the python dependency by running:\n\npip install codexbar-cookie-importer'),
+                transient_for: this.get_root(),
+                modal: true,
+            });
+            dialog.add_response('ok', _('OK'));
+            dialog.present();
+            finish();
+        };
+
+        // Find the executable binary or fallback to python module
+        // Encontrar el binario ejecutable o recurrir al módulo python
+        let argv = null;
+        if (GLib.find_program_in_path('codexbar-cookie-importer')) {
+            argv = ['codexbar-cookie-importer'];
+        } else {
+            const localBin = GLib.build_filenamev([GLib.get_home_dir(), '.local', 'bin', 'codexbar-cookie-importer']);
+            if (GLib.file_test(localBin, GLib.FileTest.EXISTS)) {
+                argv = [localBin];
+            } else {
+                // Try executing as module / Intentar ejecutar como módulo
+                argv = ['/usr/bin/python3', '-m', 'codexbar_cookie_importer'];
+            }
         }
         
         try {
             const proc = new Gio.Subprocess({
-                argv: ['/usr/bin/python3', scriptPath],
+                argv: argv,
                 flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
             });
             proc.init(null);
@@ -583,28 +589,18 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
                     
                     if (timedOut) return;
 
+                    // If the module is not found, python returns exit code 1 or 2 and No module named in stderr
+                    // Si el módulo no se encuentra, python devuelve código de salida 1 o 2 y No module named en stderr
+                    if (!success && stderr && (stderr.includes('No module named') || stderr.includes('No such file'))) {
+                        showMissingDialog();
+                        return;
+                    }
+
                     if (success && stdout) {
                         const result = JSON.parse(stdout.trim());
                         
                         if (result.error === 'DEPENDENCIES_MISSING') {
-                            const dialog = new Adw.MessageDialog({
-                                heading: _('Dependencies Missing'),
-                                body: _('To import cookies, you need to install secretstorage and cryptography. Would you like to try installing them now?'),
-                                transient_for: this.get_root(),
-                                modal: true,
-                            });
-                            dialog.add_response('cancel', _('Cancel'));
-                            dialog.add_response('install', _('Install'));
-                            dialog.set_response_appearance('install', Adw.ResponseAppearance.SUGGESTED);
-
-                            dialog.connect('response', (d, response) => {
-                                if (response === 'install') {
-                                    const installCmd = `pkexec apt install python3-secretstorage python3-cryptography -y`;
-                                    GLib.spawn_command_line_async(installCmd);
-                                }
-                                finish();
-                            });
-                            dialog.present();
+                            showMissingDialog();
                         } else if (result.error) {
                             showError(_('Import Failed'), result.details || result.error);
                         } else if (result.cookie_header) {
@@ -616,19 +612,28 @@ class CodexBarPrefsPage extends Adw.PreferencesPage {
                             finish();
                         }
                     } else {
-                        const err = stderr || _('The script returned no data.');
-                        showError(_('Error'), err);
+                        const err = stderr || _('The importer returned no data.');
+                        if (err.includes('No module named')) {
+                            showMissingDialog();
+                        } else {
+                            showError(_('Error'), err);
+                        }
                     }
                 } catch (e) {
                     if (!timedOut) {
-                        logError(e, 'CodexBar: Error reading script output');
-                        showError(_('Unexpected Error'), e.message);
+                        // Check if it's a module not found issue
+                        if (e.message && e.message.includes('No module named')) {
+                            showMissingDialog();
+                        } else {
+                            logError(e, 'CodexBar: Error reading importer output');
+                            showError(_('Unexpected Error'), e.message);
+                        }
                     }
                 }
             });
         } catch (e) {
             logError(e, 'CodexBar: Error in _importFromBrowser');
-            showError(_('Unexpected Error'), e.message);
+            showMissingDialog();
         }
     }
 });

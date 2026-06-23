@@ -489,6 +489,28 @@ export default class CodexBarExtension extends Extension {
   }
 
   /**
+   * Check if a binary exists in the PATH or standard directories.
+   * Comprueba si existe un binario en el PATH o en directorios estándar.
+   */
+  _checkBinaryExists(name) {
+    if (GLib.find_program_in_path(name)) {
+      return true;
+    }
+    const commonPaths = [
+      `/home/linuxbrew/.linuxbrew/bin/${name}`,
+      `${GLib.get_home_dir()}/.local/bin/${name}`,
+      `/usr/local/bin/${name}`,
+      `/usr/bin/${name}`,
+    ];
+    for (const path of commonPaths) {
+      if (GLib.file_test(path, GLib.FileTest.EXISTS)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Update the indicator menu UI.
    * Actualiza la interfaz del menú del indicador.
    */
@@ -501,24 +523,13 @@ export default class CodexBarExtension extends Extension {
     const displayMode = this._settings.get_string("display-mode");
     const firstRun = this._settings.get_boolean("first-run");
 
-    // Check for codexbar CLI presence
-    // Comprobar la presencia de la CLI de codexbar
-    let codexbarExists = false;
-    const commonPaths = [
-      "/home/linuxbrew/.linuxbrew/bin/codexbar",
-      `${GLib.get_home_dir()}/.local/bin/codexbar`,
-      "/usr/local/bin/codexbar",
-      "/usr/bin/codexbar",
-    ];
-    for (const path of commonPaths) {
-      if (GLib.file_test(path, GLib.FileTest.EXISTS)) {
-        codexbarExists = true;
-        break;
-      }
-    }
+    // Check for CLI and Cookie Importer presence
+    // Comprobar la presencia de la CLI y del importador de cookies
+    const codexbarExists = this._checkBinaryExists("codexbar");
+    const importerExists = this._checkBinaryExists("codexbar-cookie-importer");
 
     if (firstRun || !codexbarExists) {
-      this._showWelcomeScreen(codexbarExists);
+      this._showWelcomeScreen(codexbarExists, importerExists);
       return;
     }
 
@@ -821,77 +832,124 @@ export default class CodexBarExtension extends Extension {
   }
 
   /**
-   * Show welcome screen for first-run or missing CLI.
-   * Muestra la pantalla de bienvenida para la primera ejecución o si falta la CLI.
+   * Show welcome screen for first-run or missing dependencies.
+   * Muestra la pantalla de bienvenida para la primera ejecución o dependencias faltantes.
    */
-  _showWelcomeScreen(codexbarExists) {
+  _showWelcomeScreen(codexbarExists, importerExists) {
     let box = new St.BoxLayout({
       vertical: true,
       x_expand: true,
-      style: "padding: 10px;",
+      style: "padding: 12px; spacing: 10px;",
     });
 
     box.add_child(
       new St.Label({
         text: _("Welcome to CodexBar!"),
-        style: "font-weight: bold; font-size: 1.2em; margin-bottom: 10px;",
+        style: "font-weight: bold; font-size: 1.25em; margin-bottom: 5px;",
+      }),
+    );
+
+    box.add_child(
+      new St.Label({
+        text: _("Please configure your system dependencies:"),
+        style: "font-size: 0.95em; color: #a6e3a1; margin-bottom: 10px;",
+      }),
+    );
+
+    // --- Dependency 1: CodexBar CLI ---
+    // --- Dependencia 1: CodexBar CLI ---
+    let dep1Box = new St.BoxLayout({
+      vertical: true,
+      style: "margin-bottom: 10px; background-color: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px;",
+    });
+    let dep1Header = new St.BoxLayout({ vertical: false });
+
+    let dep1StatusColor = codexbarExists ? "#2ec27e" : "#e01b24";
+    let dep1StatusText = codexbarExists ? _("● Installed") : _("● Missing");
+
+    dep1Header.add_child(
+      new St.Label({
+        text: _("1. CodexBar CLI  "),
+        style: "font-weight: bold;",
+      }),
+    );
+    dep1Header.add_child(
+      new St.Label({
+        text: dep1StatusText,
+        style: `color: ${dep1StatusColor}; font-size: 0.85em; font-weight: bold;`,
+      }),
+    );
+    dep1Box.add_child(dep1Header);
+
+    dep1Box.add_child(
+      new St.Label({
+        text: _("Required to query AI usage metrics."),
+        style: "font-size: 0.85em; color: #b5b5b5; margin-bottom: 4px; margin-top: 2px;",
       }),
     );
 
     if (!codexbarExists) {
-      box.add_child(
-        new St.Label({
-          text: _("CodexBar CLI not found. Please install it:"),
-          style: "margin-bottom: 5px;",
-        }),
-      );
-
-      let cmdScroll = new St.ScrollView({
-        style:
-          "background-color: rgba(0,0,0,0.3); border-radius: 4px; padding: 10px; margin-bottom: 15px;",
+      let dep1Cmd = new St.Label({
+        text: "brew install steipete/tap/codexbar",
+        style: "font-family: monospace; font-size: 0.85em; color: #3584e4; background-color: rgba(0,0,0,0.3); padding: 4px; border-radius: 4px; margin-top: 4px;",
       });
-      cmdScroll.add_child(
-        new St.Label({
-          text: "brew install steipete/tap/codexbar",
-          style: "font-family: monospace; color: #3584e4;",
-        }),
-      );
-      box.add_child(cmdScroll);
-    } else {
-      box.add_child(
-        new St.Label({
-          text: _("CodexBar CLI is installed! Ready to configure."),
-          style: "margin-bottom: 15px; color: #2ec27e;",
-        }),
-      );
+      dep1Box.add_child(dep1Cmd);
     }
+    box.add_child(dep1Box);
 
-    box.add_child(
+    // --- Dependency 2: Cookie Importer ---
+    // --- Dependencia 2: Importador de Cookies ---
+    let dep2Box = new St.BoxLayout({
+      vertical: true,
+      style: "margin-bottom: 10px; background-color: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px;",
+    });
+    let dep2Header = new St.BoxLayout({ vertical: false });
+
+    let dep2StatusColor = importerExists ? "#2ec27e" : "#ff7800";
+    let dep2StatusText = importerExists ? _("● Installed") : _("● Optional (for Auto-Login)");
+
+    dep2Header.add_child(
       new St.Label({
-        text: _("Configuration Tips:"),
-        style: "font-weight: bold; margin-bottom: 5px;",
+        text: _("2. Cookie Importer (pip)  "),
+        style: "font-weight: bold;",
+      }),
+    );
+    dep2Header.add_child(
+      new St.Label({
+        text: dep2StatusText,
+        style: `color: ${dep2StatusColor}; font-size: 0.85em; font-weight: bold;`,
+      }),
+    );
+    dep2Box.add_child(dep2Header);
+
+    dep2Box.add_child(
+      new St.Label({
+        text: _("Enables browser auto-login for Codex (ChatGPT)."),
+        style: "font-size: 0.85em; color: #b5b5b5; margin-bottom: 4px; margin-top: 2px;",
       }),
     );
 
-    const tips = [
-      _("• Use absolute paths for commands."),
-      _("• Ensure --format json is included."),
-      _("• Read the full documentation online."),
-    ];
-    tips.forEach((tip) => {
-      box.add_child(
-        new St.Label({
-          text: tip,
-          style: "font-size: 0.9em; margin-bottom: 2px;",
-        }),
-      );
+    if (!importerExists) {
+      let dep2Cmd = new St.Label({
+        text: "pip install codexbar-cookie-importer",
+        style: "font-family: monospace; font-size: 0.85em; color: #3584e4; background-color: rgba(0,0,0,0.3); padding: 4px; border-radius: 4px; margin-top: 4px;",
+      });
+      dep2Box.add_child(dep2Cmd);
+    }
+    box.add_child(dep2Box);
+
+    // --- Buttons ---
+    // --- Botones ---
+    let btnBox = new St.BoxLayout({
+      vertical: false,
+      style: "margin-top: 10px;",
+      x_align: Clutter.ActorAlign.CENTER,
     });
 
     let docBtn = new St.Button({
-      label: _("Read Documentation"),
+      label: _("Documentation"),
       style_class: "codexbar-tab",
-      style: "margin-top: 15px; background-color: #3584e4;",
-      x_align: Clutter.ActorAlign.CENTER,
+      style: "margin-right: 10px;",
     });
     docBtn.connect("clicked", () => {
       Gio.app_info_launch_default_for_uri(
@@ -899,19 +957,19 @@ export default class CodexBarExtension extends Extension {
         null,
       );
     });
-    box.add_child(docBtn);
+    btnBox.add_child(docBtn);
 
     let closeBtn = new St.Button({
       label: _("Get Started"),
       style_class: "codexbar-tab",
-      style: "margin-top: 10px;",
-      x_align: Clutter.ActorAlign.CENTER,
+      style: "background-color: #3584e4;",
     });
     closeBtn.connect("clicked", () => {
       this._settings.set_boolean("first-run", false);
       this._refreshData();
     });
-    box.add_child(closeBtn);
+    btnBox.add_child(closeBtn);
+    box.add_child(btnBox);
 
     this._contentBox.add_child(box);
   }

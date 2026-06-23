@@ -18,6 +18,10 @@ except ImportError:
 CHROMIUM_SECRET_SCHEMA = "chrome_libsecret_os_crypt_password_v2"
 
 def get_keys(label_hints, app_names=None):
+    """
+    Retrieve decryption keys from the Linux keyring (D-Bus / SecretStorage).
+    Recupera las claves de descifrado del llavero de Linux (D-Bus / SecretStorage).
+    """
     keys = []
     seen = set()
     errors = []
@@ -110,6 +114,10 @@ def get_keys(label_hints, app_names=None):
     return keys, None if found_keyring_keys else ("; ".join(dict.fromkeys(errors)) or None)
 
 def decrypt_v10(encrypted_value, key):
+    """
+    Decrypt cookie value encrypted with v10/v11 protocol.
+    Descifra el valor de la cookie encriptada con el protocolo v10/v11.
+    """
     if not encrypted_value or len(encrypted_value) < 3:
         return None
         
@@ -166,6 +174,10 @@ def decrypt_v10(encrypted_value, key):
         return None
 
 def is_plausible_cookie_value(name, value):
+    """
+    Validate cookie content to ensure it conforms to acceptable formats.
+    Valida el contenido de la cookie para asegurar que cumple con los formatos aceptables.
+    """
     if not value:
         return False
 
@@ -182,6 +194,10 @@ def is_plausible_cookie_value(name, value):
     return True
 
 def extract_tokens():
+    """
+    Extract OpenAI/ChatGPT cookies from local browser profiles.
+    Extrae cookies de OpenAI/ChatGPT de los perfiles de los navegadores locales.
+    """
     if not HAS_DEPS:
         return {"error": "DEPENDENCIES_MISSING"}
 
@@ -286,21 +302,5 @@ def extract_tokens():
     
     cookie_parts = session_parts + other_parts
     
-    # GNOME/Gtk/D-Bus limits: If the string is too long, it might fail to pass through some channels.
-    # 4KB is a safe bet for many systems, though D-Bus allows much more.
-    # Let's see if we can fit it.
-    # / Límites de GNOME/Gtk/D-Bus: si la cadena es demasiado larga, podría fallar al pasar por algunos canales.
-    # 4KB es una apuesta segura para muchos sistemas, aunque D-Bus permite mucho más. Veámos si cabe.
     header = "; ".join(cookie_parts)
-    if len(header) > 8192:
-        # If still too long, we might need to be more aggressive, but session-token is vital.
-        # Let's just return what we have for now and hope for the best.
-        pass
-        
     return {"cookie_header": header}
-
-if __name__ == "__main__":
-    try:
-        print(json.dumps(extract_tokens()))
-    except Exception as e:
-        print(json.dumps({"error": "UNEXPECTED_EXCEPTION", "details": str(e)}))
