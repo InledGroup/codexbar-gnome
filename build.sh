@@ -13,6 +13,8 @@ gnome-extensions pack \
     --extra-source=usageApi.js \
     --extra-source=secret.js \
     --extra-source=stylesheet.css \
+    --extra-source=core/ \
+    --extra-source=adapters/ \
     --extra-source=media/ \
     --schema=schemas/org.gnome.shell.extensions.codexbar.gschema.xml \
     --force

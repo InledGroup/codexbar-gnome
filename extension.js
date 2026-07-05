@@ -264,39 +264,47 @@ export default class CodexBarExtension extends Extension {
     for (let i = 0; i < this._providers.length; i++) {
       const provider = this._providers[i];
 
-      // Case 1: Provider uses Direct API (e.g. Codex)
-      // Caso 1: El proveedor usa la API directa (ej. Codex)
-      if (provider.useApi) {
+      // Case 1: Provider uses Direct API or is Antigravity (using pure GJS client)
+      // Caso 1: El proveedor usa la API directa o es Antigravity (usando cliente GJS puro)
+      if (provider.useApi || provider.id === 'antigravity') {
         try {
-          const token = loadToken(provider.id);
-
-          if (!token) {
-            this._providersData[i] = { error: _("No token found in keyring") };
-            continue;
+          let data;
+          if (provider.id === 'antigravity') {
+            data = await this._apiClient.fetchAntigravitySummary(this._cancellable);
+          } else {
+            const token = loadToken(provider.id);
+            if (!token) {
+              this._providersData[i] = { error: _("No token found in keyring") };
+              continue;
+            }
+            data = await this._apiClient.fetchSummary(token, this._cancellable);
           }
-          const data = await this._apiClient.fetchSummary(token);
 
           // Generate dynamic labels based on window durations
           // Generar etiquetas dinámicas basadas en las duraciones de las ventanas
           let apiLabels = [];
-          ["primary", "secondary", "tertiary", "quaternary"].forEach((tier) => {
-            const win = data.usage[tier];
-            if (win && win.windowSeconds) {
-              const hours = Math.round(win.windowSeconds / 3600);
-              if (hours >= 24) {
-                const days = Math.round(hours / 24);
-                apiLabels.push(
-                  days === 7
-                    ? _("Weekly Window")
-                    : _("%d-Day Window").format(days),
-                );
-              } else {
-                apiLabels.push(_("%d-Hour Window").format(hours));
+          if (data.labels && data.labels.length > 0) {
+            apiLabels = data.labels;
+          } else {
+            ["primary", "secondary", "tertiary", "quaternary"].forEach((tier) => {
+              const win = data.usage[tier];
+              if (win && win.windowSeconds) {
+                const hours = Math.round(win.windowSeconds / 3600);
+                if (hours >= 24) {
+                  const days = Math.round(hours / 24);
+                  apiLabels.push(
+                    days === 7
+                      ? _("Weekly Window")
+                      : _("%d-Day Window").format(days),
+                  );
+                } else {
+                  apiLabels.push(_("%d-Hour Window").format(hours));
+                }
+              } else if (win) {
+                apiLabels.push(_("Usage Window"));
               }
-            } else if (win) {
-              apiLabels.push(_("Usage Window"));
-            }
-          });
+            });
+          }
 
           this._providersData[i] = {
             data: data,
@@ -320,151 +328,43 @@ export default class CodexBarExtension extends Extension {
       }
 
       try {
-        // Find executable path
-        let executable = "/home/linuxbrew/.linuxbrew/bin/codexbar";
-        const commonPaths = [
-          "/home/linuxbrew/.linuxbrew/bin/codexbar",
-          `${GLib.get_home_dir()}/.local/bin/codexbar`,
-          "/usr/local/bin/codexbar",
-          "/usr/bin/codexbar",
-        ];
-
-        for (const path of commonPaths) {
-          if (GLib.file_test(path, GLib.FileTest.EXISTS)) {
-            executable = path;
-            break;
-          }
-        }
-
-        let finalCommand = provider.command;
-        if (
-          provider.command.startsWith("codexbar") &&
-          !provider.command.startsWith("/")
-        ) {
-          finalCommand = provider.command.replace("codexbar", executable);
-        }
-
-        const proc = Gio.Subprocess.new(
-          ["bash", "-c", finalCommand],
-          Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
-        );
-
-        const [stdout, stderr] = await new Promise((resolve, reject) => {
-          proc.communicate_utf8_async(null, this._cancellable, (p, res) => {
-            try {
-              const [ok, out, err] = p.communicate_utf8_finish(res);
-              resolve([out || "", err || ""]);
-            } catch (e) {
-              if (e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
-                resolve(["", ""]);
-              else reject(e);
-            }
-          });
-        });
-
+        const result = await this._apiClient.fetchCliSummary(provider.command, this._cancellable);
         if (!this._cancellable || this._cancellable.is_cancelled()) return;
 
-        const trimmedStdout = stdout.trim();
-        const trimmedStderr = stderr.trim();
+        let rawData = result.data;
+        let finalLabels = result.labels || [];
+
+        if (rawData) {
+          const isAntigravity = provider.id === "antigravity" || rawData.provider === "antigravity";
+          
+          if (rawData.usage) {
+            const normalized = this._apiClient.normalizeSummary(rawData.usage, isAntigravity);
+            rawData.usage = normalized.usage;
+            if (normalized.labels && normalized.labels.length > 0) {
+              finalLabels = normalized.labels;
+            }
+          } else {
+            const normalized = this._apiClient.normalizeSummary(rawData, isAntigravity);
+            rawData = { ...rawData, usage: normalized.usage };
+            if (normalized.labels && normalized.labels.length > 0) {
+              finalLabels = normalized.labels;
+            }
+          }
+        }
 
         this._providersData[i] = {
-          stdout: trimmedStdout,
-          stderr: trimmedStderr,
-          command: finalCommand,
-          labels: [],
+          data: rawData,
+          labels: finalLabels,
+          command: result.command,
         };
-
-        // Automatic label detection for CLI providers
-        // Detección automática de etiquetas para proveedores CLI
-        try {
-          let discoveryCommand = finalCommand
-            .replace("--format json", "")
-            .replace("--json-only", "")
-            .replace("--json", "")
-            .replace("--pretty", "");
-
-          const dProc = Gio.Subprocess.new(
-            ["bash", "-c", discoveryCommand],
-            Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
-          );
-
-          const [dStdout] = await new Promise((resolve) => {
-            dProc.communicate_utf8_async(null, this._cancellable, (p, res) => {
-              try {
-                const [ok, out] = p.communicate_utf8_finish(res);
-                resolve([out || ""]);
-              } catch (e) {
-                resolve([""]);
-              }
-            });
-          });
-
-          if (dStdout) {
-            const lines = dStdout.split("\n");
-            for (let line of lines) {
-              const match = line.match(/^([^:]+):\s+\d+%/);
-              if (match) {
-                this._providersData[i].labels.push(match[1].trim());
-              }
-            }
-          }
-        } catch (discoveryErr) {
-          log(
-            `CodexBar: Label discovery failed for ${provider.name}: ${discoveryErr.message}`,
-          );
-        }
-
-        if (
-          trimmedStdout &&
-          (trimmedStdout.startsWith("[") || trimmedStdout.startsWith("{"))
-        ) {
-          try {
-            const parsed = JSON.parse(trimmedStdout);
-            let rawData = Array.isArray(parsed) ? parsed[0] : parsed;
-
-            if (rawData) {
-              // Check if the provider is antigravity
-              // Comprobar si el proveedor es antigravity
-              const isAntigravity = provider.id === "antigravity" || rawData.provider === "antigravity";
-              
-              if (rawData.usage) {
-                // Normalize the nested usage data
-                // Normalizar los datos de uso anidados
-                const normalized = this._apiClient.normalizeSummary(rawData.usage, isAntigravity);
-                rawData.usage = normalized.usage;
-                if (normalized.labels && normalized.labels.length > 0) {
-                  this._providersData[i].labels = normalized.labels;
-                }
-              } else {
-                // Treat the root object as usage data
-                // Tratar el objeto raíz como datos de uso
-                const normalized = this._apiClient.normalizeSummary(rawData, isAntigravity);
-                rawData = { ...rawData, usage: normalized.usage };
-                if (normalized.labels && normalized.labels.length > 0) {
-                  this._providersData[i].labels = normalized.labels;
-                }
-              }
-            }
-            this._providersData[i].data = rawData;
-          } catch (jsonErr) {
-            this._providersData[i].error = _("JSON Error: %s").format(
-              jsonErr.message,
-            );
-          }
-        } else if (trimmedStderr) {
-          this._providersData[i].error = _("CLI Error: %s").format(
-            trimmedStderr.split("\n")[0],
-          );
-        } else if (trimmedStdout) {
-          this._providersData[i].error = _("Output is not valid JSON");
-        } else {
-          this._providersData[i].error = _("No output from command");
-        }
       } catch (error) {
         if (this._cancellable && !this._cancellable.is_cancelled()) {
           logError(error, `CodexBar: error running provider ${provider.name}`);
+          let msg = error.message;
+          if (!msg && error.toString) msg = error.toString();
+          if (!msg || msg === "[object Object]") msg = _("Unknown CLI error");
           this._providersData[i] = {
-            error: error.message,
+            error: msg,
             command: provider.command,
           };
         }

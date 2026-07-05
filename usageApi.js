@@ -1,6 +1,9 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup?version=3.0';
+import { SoupApiFetcher } from './adapters/SoupApiFetcher.js';
+import { AntigravityLocalFetcher } from './adapters/AntigravityLocalFetcher.js';
+import { CliSubprocessFetcher } from './adapters/CliSubprocessFetcher.js';
 
 const API_BASE_URL = 'https://chatgpt.com';
 const SUMMARY_ENDPOINT = '/backend-api/wham/usage';
@@ -146,45 +149,35 @@ export class UsageApiClient {
         this._session = new Soup.Session({
             timeout: 30,
         });
+        this._soupFetcher = new SoupApiFetcher(this._session);
+        this._antigravityFetcher = new AntigravityLocalFetcher(this._session);
+        this._cliFetcher = new CliSubprocessFetcher();
     }
 
     /**
      * Fetch usage summary from OpenAI API.
      * Obtiene el resumen de uso desde la API de OpenAI.
      */
-    async fetchSummary(cookies) {
-        // Step 1: Get the access token using the cookies
-        // Paso 1: Obtener el token de acceso usando las cookies
-        let sessionData;
-        try {
-            sessionData = await this._getJson('/api/auth/session', cookies);
-        } catch (e) {
-            throw new UsageApiError('Failed to retrieve access token: ' + e.message);
-        }
-        
-        if (!sessionData || !sessionData.accessToken) {
-            throw new UsageApiError('Failed to retrieve access token from session. Cookies might be invalid.');
-        }
-
-        // Step 2: Use the access token to fetch usage
-        // Paso 2: Usar el token de acceso para obtener el uso
-        const usagePayload = await this._getJsonWithAuth(SUMMARY_ENDPOINT, sessionData.accessToken);
-        
-        // Step 3: Ensure we have an email (fallback to /me if missing from usage payload)
-        // Paso 3: Asegurar que tenemos un email (respaldo en /me si falta en el payload de uso)
-        if (!usagePayload.email) {
-            try {
-                const meData = await this._getJsonWithAuth(ME_ENDPOINT, sessionData.accessToken);
-                if (meData && meData.email) {
-                    usagePayload.email = meData.email;
-                }
-            } catch (e) {
-                // Silently fail email fallback
-                // Fallo silencioso del respaldo de email
-            }
-        }
-
+    async fetchSummary(cookies, cancellable = null) {
+        const usagePayload = await this._soupFetcher.fetch(cookies, { cancellable });
         return this.normalizeSummary(usagePayload);
+    }
+
+    /**
+     * Fetch usage summary from Antigravity local server.
+     * Obtiene el resumen de uso desde el servidor local de Antigravity.
+     */
+    async fetchAntigravitySummary(cancellable = null) {
+        const usagePayload = await this._antigravityFetcher.fetch(null, { cancellable });
+        return this.normalizeSummary(usagePayload, true);
+    }
+
+    /**
+     * Fetch usage summary via external codexbar CLI tool.
+     * Obtiene el resumen de uso mediante la herramienta externa de terminal codexbar.
+     */
+    async fetchCliSummary(command, cancellable = null) {
+        return this._cliFetcher.fetch(command, cancellable);
     }
 
     /**
@@ -196,71 +189,6 @@ export class UsageApiClient {
             this._session.abort();
             this._session = null;
         }
-    }
-
-    async _getJson(path, cookies) {
-        if (!cookies)
-            throw new UsageApiError('Authentication cookies are required.');
-
-        const message = Soup.Message.new('GET', `${API_BASE_URL}${path}`);
-        const headers = message.get_request_headers();
-        headers.append('Accept', 'application/json');
-        headers.append('Cookie', cookies);
-        headers.append('Referer', 'https://chatgpt.com/');
-        headers.append('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
-        
-        // Extract oai-did from cookies if present
-        const match = cookies.match(/oai-did=([^;]+)/);
-        if (match) {
-            headers.append('oai-device-id', match[1]);
-        }
-
-        return this._executeRequest(message);
-    }
-
-    async _getJsonWithAuth(path, accessToken) {
-        const message = Soup.Message.new('GET', `${API_BASE_URL}${path}`);
-        const headers = message.get_request_headers();
-        headers.append('Accept', 'application/json');
-        headers.append('Authorization', `Bearer ${accessToken}`);
-        headers.append('Referer', 'https://chatgpt.com/');
-        headers.append('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
-
-        return this._executeRequest(message);
-    }
-
-    async _executeRequest(message) {
-        let bytes;
-        try {
-            bytes = await this._session.send_and_read_async(
-                message,
-                GLib.PRIORITY_DEFAULT,
-                null,
-            );
-        } catch (error) {
-            throw new UsageApiError(error.message || String(error));
-        }
-
-        const statusCode = message.get_status();
-        const body = new TextDecoder().decode(bytes?.toArray?.() ?? bytes?.get_data?.() ?? []);
-        
-        let payload = null;
-        try {
-            payload = body ? JSON.parse(body) : null;
-        } catch (error) {
-            if (statusCode >= 400) {
-                throw new UsageApiError(`HTTP ${statusCode}: ${body.substring(0, 100)}`, { statusCode });
-            }
-            throw new UsageApiError(`Invalid JSON: ${error.message}`, { statusCode });
-        }
-
-        if (statusCode < 200 || statusCode >= 300) {
-            let messageText = payload?.message || payload?.error?.message || payload?.error || `HTTP ${statusCode}`;
-            if (typeof messageText === 'object') messageText = JSON.stringify(messageText);
-            throw new UsageApiError(messageText, {statusCode, payload});
-        }
-
-        return payload;
     }
 
 
