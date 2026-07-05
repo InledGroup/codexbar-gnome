@@ -77,10 +77,13 @@ You can choose how metrics are displayed:
 - **Remaining**: Shows the percentage of quota left (default).
 - **Used**: Shows the percentage of quota consumed.
 
-## Documentation
-
-Detailed setup guides and troubleshooting information can be found at [help.inled.es/codexbar-gnome](https://help.inled.es/codexbar-gnome).
 
 ## License
 
-This project is licensed under the terms of the MIT license. Contributions are welcome!
+This project is licensed under the terms of the MIT license. Contributions are welcome! 
+
+> [!WARNING]
+> If you base your code on ours or remix it using AI, you must credit the original repository out of respect for the contributors and the creator.
+
+## About:  
+I've been working on a lot of projects lately and wasn't sure if people really cared about them until this one completely brought back my excitement for development and showed me how useful it can be for users. The GNOME community is fantastic.
