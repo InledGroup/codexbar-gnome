@@ -78,6 +78,15 @@ You can choose how metrics are displayed:
 - **Used**: Shows the percentage of quota consumed.
 
 
+## Join the Community
+
+Follow us on social media for updates, discussions, and support:
+
+- **Discord**: [Join our Discord server](https://discord.com/invite/PSeTkDMnr)
+- **Mastodon**: [@inled on mastodon.social](https://mastodon.social/@inled)
+- **YouTube**: [Inled Group YouTube Channel](https://www.youtube.com/@inledgroup)
+- **X (Twitter)**: [@inledgroup on X](https://x.com/inledgroup)
+
 ## License
 
 This project is licensed under the terms of the MIT license. Contributions are welcome! 
@@ -87,6 +96,3 @@ This project is licensed under the terms of the MIT license. Contributions are w
 
 ## About:  
 I've been working on a lot of projects lately and wasn't sure if people really cared about them until this one completely brought back my excitement for development and showed me how useful it can be for users. The GNOME community is fantastic.
-
-## Third party software   
-Codexbar GNOME uses an adapted third-party implementation. It is licensed under the MIT license, so we credit the author: [Marouan-chak/codexbar-waybar](https://github.com/Marouan-chak/codexbar-waybar). Their implementation is used to resolve the Antigravity certificate issue.

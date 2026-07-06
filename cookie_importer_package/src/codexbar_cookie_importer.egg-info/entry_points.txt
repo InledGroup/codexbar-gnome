@@ -1,2 +1,0 @@
-[console_scripts]
-codexbar-cookie-importer = codexbar_cookie_importer.__main__:main
