@@ -2,6 +2,46 @@ import { formatResetDescription, UsageApiClient } from "./usageApi.js";
 
 const client = new UsageApiClient();
 
+// Real-world Codex payload shape: canonical primary/secondary windows plus
+// extraRateWindows for Codex Spark. The canonical windows must stay first and
+// the Spark windows must be appended, not replace them.
+const codexSparkUsage = {
+  accountEmail: "user@example.com",
+  updatedAt: "2026-07-10T13:08:58Z",
+  identity: { providerID: "codex" },
+  primary: {
+    usedPercent: 49,
+    windowMinutes: 300,
+    resetsAt: "2030-01-01T17:06:02Z",
+  },
+  secondary: {
+    usedPercent: 24,
+    windowMinutes: 10080,
+    resetsAt: "2030-01-01T06:17:16Z",
+  },
+  tertiary: null,
+  extraRateWindows: [
+    {
+      id: "codex-spark",
+      title: "Codex Spark 5-hour",
+      window: {
+        usedPercent: 5,
+        windowMinutes: 300,
+        resetsAt: "2030-01-01T18:08:57Z",
+      },
+    },
+    {
+      id: "codex-spark-weekly",
+      title: "Codex Spark Weekly",
+      window: {
+        usedPercent: 3,
+        windowMinutes: 10080,
+        resetsAt: "2030-01-01T13:08:57Z",
+      },
+    },
+  ],
+};
+
 const testCases = [
   {
     name: "OpenRouter (User reported)",
@@ -72,6 +112,11 @@ const testCases = [
       total: 20,
     },
     expectedUsedPercent: 75,
+  },
+  {
+    name: "Codex with Spark extra rate windows",
+    data: { provider: "codex", usage: codexSparkUsage },
+    expectedUsedPercent: 49,
   },
   {
     name: "Antigravity (User reported)",
@@ -212,4 +257,37 @@ if (laterWeeklyReset !== `Resets at ${laterDateTime} (in 48h)`) {
 
 console.log(
   "✓ Weekly reset dates are shown only when the reset is on another day",
+);
+
+// Codex + Spark: canonical windows stay in primary/secondary, Spark windows
+// fill tertiary/quaternary, and labels cover all four tiers in order.
+const codexSpark = client.normalizeSummary(codexSparkUsage, false);
+const sparkExpectations = [
+  ["primary", 49],
+  ["secondary", 24],
+  ["tertiary", 5],
+  ["quaternary", 3],
+];
+sparkExpectations.forEach(([tier, expected]) => {
+  const win = codexSpark.usage[tier];
+  if (!win || Math.abs(win.usedPercent - expected) > 0.0001) {
+    throw new Error(
+      `Codex Spark: expected ${tier} at ${expected}% used, got ${win ? win.usedPercent : "null"}`,
+    );
+  }
+});
+const expectedSparkLabels = [
+  "5-Hour Window",
+  "Weekly Window",
+  "Codex Spark 5-hour",
+  "Codex Spark Weekly",
+];
+if (JSON.stringify(codexSpark.labels) !== JSON.stringify(expectedSparkLabels)) {
+  throw new Error(
+    `Codex Spark: expected labels ${JSON.stringify(expectedSparkLabels)}, got ${JSON.stringify(codexSpark.labels)}`,
+  );
+}
+
+console.log(
+  "✓ Codex extraRateWindows are appended after canonical windows with labels",
 );

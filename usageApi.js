@@ -191,12 +191,10 @@ export class UsageApiClient {
     normalizeSummary(payload, isAntigravity = false) {
         // Detect if the provider is antigravity
         // Detectar si el proveedor es antigravity
-        const isAnti = isAntigravity || 
-            payload?.identity?.providerID === "antigravity" || 
+        const isAnti = isAntigravity ||
+            payload?.identity?.providerID === "antigravity" ||
             payload?.provider === "antigravity" ||
-            payload?.usage?.identity?.providerID === "antigravity" ||
-            (payload?.extraRateWindows && Array.isArray(payload.extraRateWindows)) ||
-            (payload?.usage?.extraRateWindows && Array.isArray(payload.usage.extraRateWindows));
+            payload?.usage?.identity?.providerID === "antigravity";
 
         const mapSingle = (obj) => {
             const win = makeWindow(obj);
@@ -245,17 +243,48 @@ export class UsageApiClient {
             };
         }
 
-        // If it already has structured tiers, normalize them in place to keep order
+        // If it already has structured tiers, normalize them in place to keep order,
+        // then fill any remaining tier slots with extraRateWindows (e.g. Codex Spark)
+        // Si ya tiene niveles estructurados, normalizarlos manteniendo el orden,
+        // y rellenar los niveles restantes con extraRateWindows (ej. Codex Spark)
         if (payload.primary || payload.secondary || payload.tertiary) {
+            const labelForWindow = (win) => {
+                if (!win || !win.windowSeconds) return 'Usage Window';
+                const hours = Math.round(win.windowSeconds / 3600);
+                if (hours >= 24) {
+                    const days = Math.round(hours / 24);
+                    return days === 7 ? 'Weekly Window' : `${days}-Day Window`;
+                }
+                return `${hours}-Hour Window`;
+            };
+
+            const queue = [];
+            const tierKeys = ['primary', 'secondary', 'tertiary', 'quaternary'];
+            tierKeys.forEach((key) => {
+                const win = mapSingle(payload[key]);
+                if (win) queue.push({ win, label: labelForWindow(win) });
+            });
+            if (Array.isArray(extraWindows)) {
+                extraWindows.forEach((item) => {
+                    const win = mapSingle(item?.window);
+                    if (win) queue.push({ win, label: item?.title || labelForWindow(win) });
+                });
+            }
+
+            const mappedTiers = {};
+            const labels = [];
+            tierKeys.forEach((key, idx) => {
+                mappedTiers[key] = queue[idx] ? queue[idx].win : null;
+                if (queue[idx]) labels.push(queue[idx].label);
+            });
+
             return {
+                labels,
                 usage: {
                     ...payload,
                     accountEmail: payload?.accountEmail || payload?.email || 'API User',
                     updatedAt: payload?.updatedAt || new Date().toISOString(),
-                    primary: mapSingle(payload.primary),
-                    secondary: mapSingle(payload.secondary),
-                    tertiary: mapSingle(payload.tertiary),
-                    quaternary: mapSingle(payload.quaternary),
+                    ...mappedTiers,
                 }
             };
         }
