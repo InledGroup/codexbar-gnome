@@ -21,7 +21,12 @@ export class SoupApiFetcher extends UsageFetcher {
      */
     constructor(session) {
         super();
-        this._session = session || new Soup.Session({ timeout: 30 });
+        if (session) {
+            this._session = session;
+        } else {
+            this._session = new Soup.Session();
+            this._session.set_timeout(30);
+        }
     }
 
     /**

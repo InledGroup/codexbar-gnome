@@ -48,12 +48,13 @@ export default class CodexBarExtension extends Extension {
    * Se llama cuando la extensión se activa.
    */
   enable() {
+    // Obtiene los ajustes
     this._settings = this.getSettings();
     this._apiClient = new UsageApiClient(this.path);
     this._copyTimeouts = [];
 
     // Main indicator button in the panel
-    // Botón indicador principal en el panel
+    // El botón principal (el del uso)
     this._indicator = new PanelMenu.Button(0.0, _("CodexBar"), false);
 
     // Icon container with progress fill
@@ -72,7 +73,7 @@ export default class CodexBarExtension extends Extension {
     this._indicator.add_child(this._iconBox);
 
     // Header section of the popup menu
-    // Sección de cabecera del menú desplegable
+    // Sección de cabecera del menú desplegable (el que aparece cuando clicas)
     this._headerBox = new St.BoxLayout({
       style_class: "codexbar-header",
       vertical: false,
@@ -134,7 +135,7 @@ export default class CodexBarExtension extends Extension {
     this._cancellable = new Gio.Cancellable();
 
     // Standard signal handling
-    // Manejo estándar de señales
+    // Manejo estándar de señales 
     this._signals = [];
     this._signals.push(
       this._settings.connect("changed::providers", () =>
@@ -446,7 +447,7 @@ export default class CodexBarExtension extends Extension {
         logDev(`Fetching API summary for provider: ${provider.name}`);
         try {
           let data;
-          const token = loadToken(provider.id);
+          const token = await loadToken(provider.id);
           if (!token) {
             logDev(`Error: No token found in keyring for provider: ${provider.name}`);
             this._providersData[i] = { error: _("No token found in keyring") };
@@ -1195,7 +1196,7 @@ export default class CodexBarExtension extends Extension {
     let dep2StatusColor = importerExists ? "#2ec27e" : "#ff7800";
     let dep2StatusText = importerExists
       ? _("● Installed")
-      : _("● Optional (for Auto-Login)");
+      : _("● Optional (only for codex users and only if you want not to find and copy manually a cookie value)");
 
     dep2Header.add_child(
       new St.Label({
@@ -1213,7 +1214,7 @@ export default class CodexBarExtension extends Extension {
 
     dep2Box.add_child(
       new St.Label({
-        text: _("Enables browser auto-login for Codex (ChatGPT)."),
+        text: _("Enables browser auto cookie extraction for Codex (ChatGPT). This cookie is used to authenticate on the usage api of OpenAI"),
         style:
           "font-size: 0.85em; color: #b5b5b5; margin-bottom: 4px; margin-top: 2px;",
       }),
@@ -1247,7 +1248,7 @@ export default class CodexBarExtension extends Extension {
 
     dep3Header.add_child(
       new St.Label({
-        text: _("3. SSL Helper (pip)  "),
+        text: _("3. AGY Server Certificate Trust Helper (pip)  "),
         style: "font-weight: bold;",
       }),
     );
@@ -1261,7 +1262,7 @@ export default class CodexBarExtension extends Extension {
 
     dep3Box.add_child(
       new St.Label({
-        text: _("Required to trust the local Antigravity server certificate."),
+        text: _("Required to trust the local Antigravity server certificate. Requires privilegie elevation"),
         style:
           "font-size: 0.85em; color: #b5b5b5; margin-bottom: 4px; margin-top: 2px;",
       }),
@@ -1286,21 +1287,24 @@ export default class CodexBarExtension extends Extension {
       x_align: Clutter.ActorAlign.CENTER,
     });
 
-    let docBtn = new St.Button({
+    // Tengo que actualizar la maldita documentación. La pasaré a una WIKI de GH.
+
+   /* let docBtn = new St.Button({
       label: _("Documentation"),
       style_class: "codexbar-tab",
       style: "margin-right: 10px;",
     });
     docBtn.connect("clicked", () => {
-      Gio.app_info_launch_default_for_uri(
+      Gio.AppInfo.launch_default_for_uri(
         "https://help.inled.es/help/codexbar-gnome",
         null,
       );
     });
     btnBox.add_child(docBtn);
+    */
 
     let closeBtn = new St.Button({
-      label: _("Get Started"),
+      label: _("Get Started!"),
       style_class: "codexbar-tab",
       style: "background-color: #3584e4;",
     });

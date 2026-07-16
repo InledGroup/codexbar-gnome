@@ -6,9 +6,7 @@ import {
 
 const client = new UsageApiClient();
 
-// Real-world Codex payload shape: canonical primary/secondary windows plus
-// extraRateWindows for Codex Spark. The canonical windows must stay first and
-// the Spark windows must be appended, not replace them.
+// Es aquí donde debes añadir para testear
 const codexSparkUsage = {
   accountEmail: "user@example.com",
   updatedAt: "2026-07-10T13:08:58Z",

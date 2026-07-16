@@ -27,9 +27,16 @@ const PREDEFINED_PROVIDERS = [
     useApi: false,
     defaultCommand: "codexbar --provider claude --source cli --format json",
   },
+    {
+    id: "antigravity",
+    name: "Antigravity",
+    useApi: false,
+    defaultCommand:
+      "codexbar --provider antigravity --source cli --format json",
+  },
   {
     id: "gemini",
-    name: "Gemini",
+    name: "Gemini CLI",
     useApi: false,
     defaultCommand: "codexbar --provider gemini --source api --format json",
   },
@@ -62,13 +69,6 @@ const PREDEFINED_PROVIDERS = [
     name: "Mistral",
     useApi: false,
     defaultCommand: "codexbar --provider mistral --source api --format json",
-  },
-  {
-    id: "antigravity",
-    name: "Antigravity",
-    useApi: false,
-    defaultCommand:
-      "codexbar --provider antigravity --source cli --format json",
   },
 ];
 
@@ -231,7 +231,7 @@ const CodexBarPrefsPage = GObject.registerClass(
         css_classes: ["flat"],
       });
       prBtn.connect("clicked", () => {
-        Gio.app_info_launch_default_for_uri(
+        Gio.AppInfo.launch_default_for_uri(
           "https://github.com/InledGroup/codexbar-gnome",
           null,
         );
@@ -254,7 +254,7 @@ const CodexBarPrefsPage = GObject.registerClass(
         css_classes: ["flat"],
       });
       reviewBtn.connect("clicked", () => {
-        Gio.app_info_launch_default_for_uri(
+        Gio.AppInfo.launch_default_for_uri(
           "https://extensions.gnome.org/extension/9841/codexbar/",
           null,
         );
@@ -277,7 +277,7 @@ const CodexBarPrefsPage = GObject.registerClass(
         css_classes: ["flat"],
       });
       contactBtn.connect("clicked", () => {
-        Gio.app_info_launch_default_for_uri("mailto:hi@inled.es", null);
+        Gio.AppInfo.launch_default_for_uri("mailto:hi@inled.es", null);
       });
       contactRow.add_suffix(contactBtn);
       group.add(contactRow);
@@ -297,7 +297,7 @@ const CodexBarPrefsPage = GObject.registerClass(
         css_classes: ["suggested-action"],
       });
       webBtn.connect("clicked", () => {
-        Gio.app_info_launch_default_for_uri("https://inled.es", null);
+        Gio.AppInfo.launch_default_for_uri("https://inled.es", null);
       });
       webRow.add_suffix(webBtn);
       group.add(webRow);
@@ -335,7 +335,7 @@ const CodexBarPrefsPage = GObject.registerClass(
           btn.set_label(tooltip);
         }
         btn.connect("clicked", () => {
-          Gio.app_info_launch_default_for_uri(url, null);
+          Gio.AppInfo.launch_default_for_uri(url, null);
         });
         return btn;
       };
@@ -472,9 +472,9 @@ const CodexBarPrefsPage = GObject.registerClass(
         activeProviders = [];
       }
 
-      const saveProviders = () => {
+      const saveProviders = async () => {
         const newProviders = [];
-        this._providerRows.forEach((row) => {
+        for (const row of this._providerRows) {
           if (row._enabledSwitch.active) {
             newProviders.push({
               id: row._id,
@@ -486,11 +486,11 @@ const CodexBarPrefsPage = GObject.registerClass(
             if (row._useApi) {
               const token = row._tokenEntry.get_text();
               if (token) {
-                storeToken(row._id, token);
+                await storeToken(row._id, token);
               }
             }
           }
-        });
+        }
         this._settings.set_string("providers", JSON.stringify(newProviders));
       };
 
@@ -552,10 +552,13 @@ const CodexBarPrefsPage = GObject.registerClass(
             placeholder_text: _(
               "Authentication Cookie (starts with __Secure...)",
             ),
-            text: loadToken(row._id) || "",
           });
-          tokenEntry.connect("changed", () => {
-            storeToken(row._id, tokenEntry.get_text().trim());
+          loadToken(row._id).then((token) => {
+            if (token) tokenEntry.set_text(token);
+          }).catch(() => {});
+
+          tokenEntry.connect("changed", async () => {
+            await storeToken(row._id, tokenEntry.get_text().trim());
             saveProviders();
           });
           row._tokenEntry = tokenEntry;
@@ -911,7 +914,7 @@ const CodexBarPrefsPage = GObject.registerClass(
           return GLib.SOURCE_REMOVE;
         });
 
-        proc.communicate_utf8_async(null, cancellable, (p, res) => {
+        proc.communicate_utf8_async(null, cancellable, async (p, res) => {
           if (timeoutId > 0 && !timedOut) {
             GLib.source_remove(timeoutId);
           }
@@ -942,7 +945,7 @@ const CodexBarPrefsPage = GObject.registerClass(
                 showError(_("Import Failed"), result.details || result.error);
               } else if (result.cookie_header) {
                 tokenEntry.set_text(result.cookie_header);
-                storeToken(providerId, result.cookie_header);
+                await storeToken(providerId, result.cookie_header);
 
                 const toast = new Adw.Toast({
                   title: _("Cookies imported successfully!"),

@@ -5,6 +5,7 @@ import { SoupApiFetcher } from './adapters/SoupApiFetcher.js';
 
 import { CliSubprocessFetcher } from './adapters/CliSubprocessFetcher.js';
 
+// This is obviously for ChatGPT, not everything. I have to change the name of the constant, but I'll do it later.
 const API_BASE_URL = 'https://chatgpt.com';
 const SUMMARY_ENDPOINT = '/backend-api/wham/usage';
 const ME_ENDPOINT = '/backend-api/me';
@@ -173,9 +174,8 @@ export const calculateUsagePace = (usageWindow) => {
 
 export class UsageApiClient {
     constructor(extensionPath = null) {
-        this._session = new Soup.Session({
-            timeout: 30,
-        });
+        this._session = new Soup.Session();
+        this._session.set_timeout(30);
         this._soupFetcher = new SoupApiFetcher(this._session);
         this._cliFetcher = new CliSubprocessFetcher(extensionPath);
     }

@@ -20,43 +20,70 @@ function _getSchema() {
 /**
  * In-memory fallback for cases where the secret service is unavailable
  * (e.g., nested Wayland sessions or CI environments).
+ * Experimental
  */
 const _fallbackCache = new Map();
 
 export function storeToken(providerId, token) {
-    try {
-        return Secret.password_store_sync(
+    return new Promise((resolve) => {
+        Secret.password_store(
             _getSchema(),
             {provider_id: providerId},
             Secret.COLLECTION_DEFAULT,
             `CodexBar token for ${providerId}`,
             token,
             null,
+            (source, result) => {
+                try {
+                    const success = Secret.password_store_finish(result);
+                    resolve(success);
+                } catch (e) {
+                    console.warn(`CodexBar: Failed to store secret for ${providerId}: ${e.message}`);
+                    _fallbackCache.set(providerId, token);
+                    resolve(false);
+                }
+            }
         );
-    } catch (e) {
-        console.warn(`CodexBar: Failed to store secret for ${providerId}: ${e.message}`);
-        _fallbackCache.set(providerId, token);
-        return false;
-    }
+    });
 }
 
 export function loadToken(providerId) {
-    try {
-        return Secret.password_lookup_sync(_getSchema(), {provider_id: providerId}, null);
-    } catch (e) {
-        console.warn(`CodexBar: Failed to lookup secret for ${providerId}: ${e.message}`);
-        return _fallbackCache.get(providerId) || null;
-    }
+    return new Promise((resolve) => {
+        Secret.password_lookup(
+            _getSchema(),
+            {provider_id: providerId},
+            null,
+            (source, result) => {
+                try {
+                    const token = Secret.password_lookup_finish(result);
+                    resolve(token);
+                } catch (e) {
+                    console.warn(`CodexBar: Failed to lookup secret for ${providerId}: ${e.message}`);
+                    resolve(_fallbackCache.get(providerId) || null);
+                }
+            }
+        );
+    });
 }
 
 export function clearToken(providerId) {
     _fallbackCache.delete(providerId);
-    try {
-        return Secret.password_clear_sync(_getSchema(), {provider_id: providerId}, null);
-    } catch (e) {
-        console.warn(`CodexBar: Failed to clear secret for ${providerId}: ${e.message}`);
-        return false;
-    }
+    return new Promise((resolve) => {
+        Secret.password_clear(
+            _getSchema(),
+            {provider_id: providerId},
+            null,
+            (source, result) => {
+                try {
+                    const success = Secret.password_clear_finish(result);
+                    resolve(success);
+                } catch (e) {
+                    console.warn(`CodexBar: Failed to clear secret for ${providerId}: ${e.message}`);
+                    resolve(false);
+                }
+            }
+        );
+    });
 }
 
 /**
