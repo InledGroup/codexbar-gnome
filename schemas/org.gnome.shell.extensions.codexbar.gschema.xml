@@ -26,6 +26,10 @@
       <default>true</default>
       <summary>Whether to show provider logos in the tabs</summary>
     </key>
+    <key name="show-pacing-info" type="b">
+      <default>true</default>
+      <summary>Whether to show weekly usage pacing details</summary>
+    </key>
     <key name="dev-custom-output-enabled" type="b">
       <default>false</default>
       <summary>Enable developer custom output simulation</summary>

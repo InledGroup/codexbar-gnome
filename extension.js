@@ -8,7 +8,7 @@ import {
 } from "resource:///org/gnome/shell/extensions/extension.js";
 import * as PanelMenu from "resource:///org/gnome/shell/ui/panelMenu.js";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
-import { UsageApiClient } from "./usageApi.js";
+import { calculateUsagePace, UsageApiClient } from "./usageApi.js";
 import { loadToken, nullTokenSchema } from "./secret.js";
 
 function logDev(msg) {
@@ -151,6 +151,9 @@ export default class CodexBarExtension extends Extension {
     );
     this._signals.push(
       this._settings.connect("changed::show-logos", () => this._updateUI()),
+    );
+    this._signals.push(
+      this._settings.connect("changed::show-pacing-info", () => this._updateUI()),
     );
     this._signals.push(
       this._settings.connect("changed::first-run", () => this._updateUI()),
@@ -788,6 +791,7 @@ export default class CodexBarExtension extends Extension {
     }
 
     const usage = data.usage;
+    const showPacing = this._settings.get_boolean("show-pacing-info");
 
     // Account information
     // Información de la cuenta
@@ -802,9 +806,26 @@ export default class CodexBarExtension extends Extension {
       );
       let accText = usage.accountEmail;
       if (usage.loginMethod) accText += ` (${usage.loginMethod})`;
-      accountBox.add_child(
+      const accountDetails = new St.BoxLayout({
+        vertical: false,
+        x_expand: true,
+      });
+      accountDetails.add_child(
         new St.Label({ text: accText, style_class: "codexbar-usage-subtitle" }),
       );
+      if (usage.planType) {
+        const planText =
+          usage.planType.charAt(0).toUpperCase() + usage.planType.slice(1);
+        accountDetails.add_child(
+          new St.Label({
+            text: planText,
+            style_class: "codexbar-usage-subtitle",
+            x_align: Clutter.ActorAlign.END,
+            x_expand: true,
+          }),
+        );
+      }
+      accountBox.add_child(accountDetails);
 
       if (usage.updatedAt) {
         let date = new Date(usage.updatedAt);
@@ -828,17 +849,27 @@ export default class CodexBarExtension extends Extension {
     const discoveredLabels = activeData.labels || [];
     let hasTiers = false;
 
-    tiers.forEach((tier, tierIdx) => {
-      if (usage[tier] && usage[tier].usedPercent !== undefined) {
-        hasTiers = true;
-        let tierData = usage[tier];
+    const usageEntries = tiers.map((tier, tierIdx) => ({
+      data: usage[tier],
+      showPace: true,
+      title:
+        discoveredLabels[tierIdx] ||
+        tier.charAt(0).toUpperCase() + tier.slice(1),
+    }));
+    usageEntries.push({
+      data: usage.codeReview,
+      showPace: false,
+      title: _("Code review"),
+    });
 
-        let tierTitle =
-          discoveredLabels[tierIdx] ||
-          tier.charAt(0).toUpperCase() + tier.slice(1);
+    usageEntries.forEach((entry) => {
+      if (entry.data && entry.data.usedPercent !== undefined) {
+        hasTiers = true;
+        let tierData = entry.data;
+
         this._contentBox.add_child(
           new St.Label({
-            text: tierTitle,
+            text: entry.title,
             style_class: "codexbar-usage-title",
           }),
         );
@@ -893,6 +924,35 @@ export default class CodexBarExtension extends Extension {
 
         this._contentBox.add_child(statsBox);
 
+        if (showPacing && entry.showPace && tierData.windowSeconds >= 7 * 24 * 3600) {
+          const pace = calculateUsagePace(tierData);
+          if (pace) {
+            const roundedReserve = Math.round(pace.reservePercent);
+            const paceBox = new St.BoxLayout({ vertical: false, x_expand: true });
+            paceBox.add_child(
+              new St.Label({
+                text:
+                  roundedReserve >= 0
+                    ? _("%d%% in reserve").format(roundedReserve)
+                    : _("%d%% over pace").format(Math.abs(roundedReserve)),
+                style_class: "codexbar-usage-subtitle",
+              }),
+            );
+            paceBox.add_child(
+              new St.Label({
+                text:
+                  roundedReserve >= 0
+                    ? _("Lasts until reset")
+                    : _("May run out before reset"),
+                style_class: "codexbar-usage-subtitle",
+                x_align: Clutter.ActorAlign.END,
+                x_expand: true,
+              }),
+            );
+            this._contentBox.add_child(paceBox);
+          }
+        }
+
         let sep = new St.Widget({
           style:
             "height: 1px; background-color: rgba(255,255,255,0.05); margin-bottom: 10px; margin-top: 5px;",
@@ -900,6 +960,31 @@ export default class CodexBarExtension extends Extension {
         this._contentBox.add_child(sep);
       }
     });
+
+    if (usage.rateLimitResetCredits?.availableCount !== undefined) {
+      const creditCount = usage.rateLimitResetCredits.availableCount;
+      const creditsBox = new St.BoxLayout({
+        vertical: true,
+        style_class: "codexbar-reset-credits",
+        x_expand: true,
+      });
+      creditsBox.add_child(
+        new St.Label({
+          text: _("Limit reset credits"),
+          style_class: "codexbar-usage-title",
+        }),
+      );
+      creditsBox.add_child(
+        new St.Label({
+          text:
+            creditCount === 1
+              ? _("1 available")
+              : _("%d available").format(creditCount),
+          style_class: "codexbar-usage-subtitle",
+        }),
+      );
+      this._contentBox.add_child(creditsBox);
+    }
 
     if (!hasTiers && usage.providerCost) {
       let costBox = new St.BoxLayout({

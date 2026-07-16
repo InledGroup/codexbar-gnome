@@ -144,6 +144,33 @@ export const formatResetDescription = (seconds, windowSeconds, now = new Date())
     return `Resets at ${resetStr} (in ${hours}h)`;
 };
 
+export const calculateUsagePace = (usageWindow) => {
+    const usedPercent = Number(usageWindow?.usedPercent);
+    const windowSeconds = Number(usageWindow?.windowSeconds);
+    const resetAfterSeconds = Number(usageWindow?.resetAfterSeconds);
+    if (
+        !Number.isFinite(usedPercent) ||
+        !Number.isFinite(windowSeconds) ||
+        !Number.isFinite(resetAfterSeconds) ||
+        windowSeconds <= 0 ||
+        resetAfterSeconds <= 0
+    ) {
+        return null;
+    }
+
+    const elapsedSeconds = Math.min(
+        windowSeconds,
+        Math.max(0, windowSeconds - resetAfterSeconds)
+    );
+    if (elapsedSeconds <= 0) return null;
+
+    const expectedUsedPercent = elapsedSeconds / windowSeconds * 100;
+    return {
+        expectedUsedPercent,
+        reservePercent: expectedUsedPercent - usedPercent,
+    };
+};
+
 export class UsageApiClient {
     constructor(extensionPath = null) {
         this._session = new Soup.Session({
@@ -206,8 +233,32 @@ export class UsageApiClient {
                     win.reset_after_seconds,
                     win.window_seconds
                 ) || obj?.resetDescription || '',
-                windowSeconds: win.window_seconds
+                windowSeconds: win.window_seconds,
+                resetAfterSeconds: win.reset_after_seconds
             };
+        };
+
+        const codeReviewRateLimit =
+            payload?.code_review_rate_limit ?? payload?.codeReviewRateLimit;
+        const codeReviewWindow = codeReviewRateLimit && (
+            codeReviewRateLimit.primary_window ??
+            codeReviewRateLimit.primary ??
+            codeReviewRateLimit
+        );
+        const resetCredits =
+            payload?.rate_limit_reset_credits ?? payload?.rateLimitResetCredits;
+        const availableResetCredits = Number(
+            resetCredits?.available_count ?? resetCredits?.availableCount
+        );
+        const codexDetails = {
+            planType: payload?.plan_type ?? payload?.planType ?? '',
+            codeReview: mapSingle(codeReviewWindow),
+            rateLimitResetCredits: Number.isFinite(availableResetCredits)
+                ? {
+                    ...resetCredits,
+                    availableCount: availableResetCredits,
+                }
+                : null,
         };
 
         const extraWindows = payload?.extraRateWindows || payload?.usage?.extraRateWindows;
@@ -238,6 +289,7 @@ export class UsageApiClient {
                     accountEmail: payload?.accountEmail || payload?.email || payload?.identity?.accountEmail || 'Antigravity User',
                     loginMethod: payload?.loginMethod || payload?.identity?.loginMethod || '',
                     updatedAt: payload?.updatedAt || new Date().toISOString(),
+                    ...codexDetails,
                     ...mappedTiers
                 }
             };
@@ -284,6 +336,7 @@ export class UsageApiClient {
                     ...payload,
                     accountEmail: payload?.accountEmail || payload?.email || 'API User',
                     updatedAt: payload?.updatedAt || new Date().toISOString(),
+                    ...codexDetails,
                     ...mappedTiers,
                 }
             };
@@ -299,7 +352,8 @@ export class UsageApiClient {
                 w.reset_after_seconds,
                 w.window_seconds
             ) || '',
-            windowSeconds: w.window_seconds
+            windowSeconds: w.window_seconds,
+            resetAfterSeconds: w.reset_after_seconds
         } : null;
 
         return {
@@ -307,6 +361,7 @@ export class UsageApiClient {
                 ...payload,
                 accountEmail: payload?.accountEmail || payload?.email || 'API User',
                 updatedAt: payload?.updatedAt || new Date().toISOString(),
+                ...codexDetails,
                 primary: mapWindow(sorted[0], payload?.primary) || payload?.primary || null,
                 secondary: mapWindow(sorted[1], payload?.secondary) || payload?.secondary || null,
                 tertiary: mapWindow(sorted[2], payload?.tertiary) || payload?.tertiary || null,

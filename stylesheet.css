@@ -86,6 +86,12 @@
     border-radius: 3px;
 }
 
+.codexbar-reset-credits {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 12px;
+    margin-top: 2px;
+}
+
 .codexbar-footer {
     padding: 10px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);

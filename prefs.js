@@ -434,6 +434,21 @@ const CodexBarPrefsPage = GObject.registerClass(
       );
       group.add(showLogosRow);
 
+      const showPacingInfoRow = new Adw.SwitchRow({
+        title: _("Show Usage Pacing"),
+        subtitle: _(
+          "Display weekly pacing estimates (reserve or over pace) for large windows",
+        ),
+        active: this._settings.get_boolean("show-pacing-info"),
+      });
+      this._settings.bind(
+        "show-pacing-info",
+        showPacingInfoRow,
+        "active",
+        Gio.SettingsBindFlags.DEFAULT,
+      );
+      group.add(showPacingInfoRow);
+
       return group;
     }
 

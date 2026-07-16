@@ -1,4 +1,8 @@
-import { formatResetDescription, UsageApiClient } from "./usageApi.js";
+import {
+  calculateUsagePace,
+  formatResetDescription,
+  UsageApiClient,
+} from "./usageApi.js";
 
 const client = new UsageApiClient();
 
@@ -259,6 +263,18 @@ console.log(
   "✓ Weekly reset dates are shown only when the reset is on another day",
 );
 
+const screenshotPace = calculateUsagePace({
+  usedPercent: 2,
+  windowSeconds: 7 * 24 * 3600,
+  resetAfterSeconds: (6 * 24 + 14) * 3600,
+});
+if (!screenshotPace || Math.round(screenshotPace.reservePercent) !== 4) {
+  throw new Error(
+    `Expected the screenshot's weekly window to have 4% in reserve, got ${screenshotPace?.reservePercent}`,
+  );
+}
+console.log("✓ Weekly usage pace calculates reserve from the reset window");
+
 // Codex + Spark: canonical windows stay in primary/secondary, Spark windows
 // fill tertiary/quaternary, and labels cover all four tiers in order.
 const codexSpark = client.normalizeSummary(codexSparkUsage, false);
@@ -291,6 +307,40 @@ if (JSON.stringify(codexSpark.labels) !== JSON.stringify(expectedSparkLabels)) {
 console.log(
   "✓ Codex extraRateWindows are appended after canonical windows with labels",
 );
+
+// Codex dashboard metadata that is available from the Linux usage endpoint.
+const codexDashboardPayload = {
+  email: "user@example.com",
+  plan_type: "plus",
+  rate_limit: {
+    primary_window: {
+      used_percent: 10,
+      limit_window_seconds: 604800,
+      reset_after_seconds: 566279,
+    },
+  },
+  code_review_rate_limit: {
+    primary_window: {
+      used_percent: 2,
+      limit_window_seconds: 604800,
+      reset_after_seconds: 400000,
+    },
+  },
+  rate_limit_reset_credits: {
+    available_count: 2,
+  },
+};
+const normalizedDashboard = client.normalizeSummary(codexDashboardPayload);
+if (normalizedDashboard.usage.planType !== "plus") {
+  throw new Error("Expected Codex plan type to be preserved");
+}
+if (normalizedDashboard.usage.codeReview?.usedPercent !== 2) {
+  throw new Error("Expected Codex code review limit to be normalized");
+}
+if (normalizedDashboard.usage.rateLimitResetCredits?.availableCount !== 2) {
+  throw new Error("Expected Codex reset-credit count to be normalized");
+}
+console.log("\u2713 Codex plan, code review, and reset credits normalize correctly");
 
 // Test OpenCode Go Zen providerCost normalization
 const zenPayload = {
