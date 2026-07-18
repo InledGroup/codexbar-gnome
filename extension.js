@@ -1,3 +1,5 @@
+// This file contains the main skeleton of the extension. Is like the HTML ;)
+
 import Gio from "gi://Gio";
 import GLib from "gi://GLib";
 import St from "gi://St";

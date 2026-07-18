@@ -1,3 +1,4 @@
+// Here is the functionality to store securely the auth token for OpenAI
 import Secret from 'gi://Secret';
 
 const SECRET_SCHEMA_NAME = 'org.gnome.shell.extensions.codexbar.token';

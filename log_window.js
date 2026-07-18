@@ -1,3 +1,4 @@
+// The log window contains all the logs of the extension and it shows up when you enable it on prefs
 import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
 import Gdk from 'gi://Gdk';

@@ -1,12 +1,12 @@
 #!/bin/bash
-# Script para empaquetar la extensión
+# Script to package the extension
 
 UUID="codexbar@inled.es"
 
-echo "Compilando esquemas..."
+echo "Compiling schemas..."
 glib-compile-schemas schemas/
 
-echo "Empaquetando extensión..."
+echo "Packaging Codexbar"
 gnome-extensions pack \
     --extra-source=extension.js \
     --extra-source=prefs.js \
@@ -20,4 +20,4 @@ gnome-extensions pack \
     --schema=schemas/org.gnome.shell.extensions.codexbar.gschema.xml \
     --force
 
-echo "Extensión empaquetada en ${UUID}.shell-extension.zip"
+echo "Extension packed on ${UUID}.shell-extension.zip"

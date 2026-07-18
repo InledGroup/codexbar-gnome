@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codexbar-cookie-importer"
+version = "1.0.0"
+authors = [
+    { name = "Inled Group", email = "hi@inled.es" }
+]
+description = "Cookie extraction utility for CodexBar GNOME Extension to import session tokens from Chromium browsers."
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+]
+dependencies = [
+    "secretstorage>=3.3.0",
+    "cryptography>=3.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/InledGroup/codexbar-gnome"
+Issues = "https://github.com/InledGroup/codexbar-gnome/issues"
+
+[project.scripts]
+codexbar-cookie-importer = "codexbar_cookie_importer.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,12 @@
+LICENSE
+README.md
+pyproject.toml
+src/codexbar_cookie_importer/__init__.py
+src/codexbar_cookie_importer/__main__.py
+src/codexbar_cookie_importer/importer.py
+src/codexbar_cookie_importer.egg-info/PKG-INFO
+src/codexbar_cookie_importer.egg-info/SOURCES.txt
+src/codexbar_cookie_importer.egg-info/dependency_links.txt
+src/codexbar_cookie_importer.egg-info/entry_points.txt
+src/codexbar_cookie_importer.egg-info/requires.txt
+src/codexbar_cookie_importer.egg-info/top_level.txt

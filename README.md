@@ -14,6 +14,7 @@ A GNOME Shell extension to monitor AI provider usage metrics directly from the s
 - Automatic resolution of CodexBar CLI paths (Homebrew supported).
 
 ## Updates  
+- Recovered the cookie_importer folder, deleted by mistake in commit `fec55b0`
 - show the Codex account plan and available limit-reset credits
 - calculate and display weekly usage pace from the existing quota window
 - render Code review usage when the Linux API supplies it
@@ -99,7 +100,7 @@ You can choose how metrics are displayed:
 Follow us on social media for updates, discussions, and support:
 
 - **Discord**: [Join our Discord server](https://discord.com/invite/PSeTkDMnr)
-- **Matrix**: [Join the Matrix server](https://matrix.to/#/#inledgroup:matrix.org)
+- **Matrix**: [Join the Matrix server](https://matrix.inled.es)
 - **Mastodon**: [@inled on mastodon.social](https://mastodon.social/@inled)
 - **YouTube**: [Inled Group YouTube Channel](https://www.youtube.com/@inledgroup)
 - **X (Twitter)**: [@inledgroup on X](https://x.com/inledgroup)
@@ -116,4 +117,4 @@ I've been working on a lot of projects lately and wasn't sure if people really c
 
 > [!INFO]
 > **AI DISCLAIMER**
-> Ai has been used on this project to write code and asssist. All code was been reviewed by humans and the gnome shell reviewers.
+> AI has been used on this project. ALL THE CODE has been reviewed.
