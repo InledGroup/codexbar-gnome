@@ -13,7 +13,6 @@ gnome-extensions pack \
     --extra-source=usageApi.js \
     --extra-source=secret.js \
     --extra-source=stylesheet.css \
-    --extra-source=log_window.js \
     --extra-source=core/ \
     --extra-source=adapters/ \
     --extra-source=media/ \

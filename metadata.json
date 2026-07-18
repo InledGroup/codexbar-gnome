@@ -1,7 +1,7 @@
 {
   "uuid": "codexbar@inled.es",
   "name": "CodexBar",
-  "description": "Show AI provider usage metrics in the GNOME panel. Based on codexbar by @steipete. Includes clipboard integration to copy dependency setup commands.",
+  "description": "Show AI provider usage metrics in the GNOME panel. Based on codexbar by @steipete. Featured on the official Codebar repo. ",
   "shell-version": ["45", "46", "47", "48", "49", "50"],
   "url": "https://github.com/InledGroup/codexbar-gnome",
   "settings-schema": "org.gnome.shell.extensions.codexbar",

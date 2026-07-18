@@ -101,8 +101,7 @@ const CodexBarPrefsPage = GObject.registerClass(
     }
 
     /**
-     * Build the developer/testing group.
-     * Construye el grupo de opciones de desarrollador/pruebas.
+     * From here I can pass a simulated codexbar-cli output and thus test providers that I don't have.
      */
     _buildDeveloperGroup() {
       const group = new Adw.PreferencesGroup({
@@ -114,9 +113,9 @@ const CodexBarPrefsPage = GObject.registerClass(
 
       // 1. Toggle Custom Output
       const enabledRow = new Adw.SwitchRow({
-        title: _("Test with Custom Output"),
+        title: _("Test with Custom CLI Output"),
         subtitle: _(
-          "Intercept CLI queries and return the custom JSON entered below",
+          "Simulate Codexbar-CLI outputs to test providers or other things and see how the extension renders the data",
         ),
         active: this._settings.get_boolean("dev-custom-output-enabled"),
       });
@@ -143,7 +142,7 @@ const CodexBarPrefsPage = GObject.registerClass(
 
       // 3. Mock JSON Input
       const jsonRow = new Adw.ActionRow({
-        title: _("Simulated CLI JSON Output"),
+        title: _("Codexbar-CLI custom output"),
         subtitle: _("Paste the raw JSON output to test"),
       });
       
@@ -185,21 +184,6 @@ const CodexBarPrefsPage = GObject.registerClass(
       jsonRow.add_suffix(jsonBox);
       group.add(jsonRow);
 
-      // 4. Show Log Window Toggle
-      const logWindowRow = new Adw.SwitchRow({
-        title: _("Show Standalone Log Window"),
-        subtitle: _(
-          "Open a separate GTK window displaying real-time extension execution logs",
-        ),
-        active: this._settings.get_boolean("dev-show-log-window"),
-      });
-      this._settings.bind(
-        "dev-show-log-window",
-        logWindowRow,
-        "active",
-        Gio.SettingsBindFlags.DEFAULT,
-      );
-      group.add(logWindowRow);
 
       return group;
     }
@@ -212,7 +196,7 @@ const CodexBarPrefsPage = GObject.registerClass(
       const group = new Adw.PreferencesGroup({
         title: _("Contribute & Contact"),
         description: _(
-          "Support CodexBar development and get in touch with the team.",
+          "Enjoy the community of Codexbar contributors and other Inled projects. We are waiting for you!",
         ),
       });
 
@@ -243,7 +227,7 @@ const CodexBarPrefsPage = GObject.registerClass(
       const reviewRow = new Adw.ActionRow({
         title: _("Leave a Review"),
         subtitle: _(
-          "Rate us on the GNOME Extensions website or share it on social media!",
+          "Rate the extension on EGO or share on social media.",
         ),
       });
       reviewRow.add_prefix(new Gtk.Image({ icon_name: "starred-symbolic" }));
@@ -305,7 +289,7 @@ const CodexBarPrefsPage = GObject.registerClass(
       // Social Media
       const socialRow = new Adw.ActionRow({
         title: _("Join the Community"),
-        subtitle: _("Follow us on social media for updates and support"),
+        subtitle: _("¡We have new Discord and Matrix channels!"),
       });
       socialRow.add_prefix(
         new Gtk.Image({ icon_name: "system-users-symbolic" }),
@@ -460,7 +444,7 @@ const CodexBarPrefsPage = GObject.registerClass(
       const group = new Adw.PreferencesGroup({
         title: _("AI Providers"),
         description: _(
-          "Enable providers. Codex uses Direct API. Others use codexbar-cli with --source api.",
+          "Enable providers. Codex uses Direct API, Antigravity needs the plugin and others use codexbar-cli with --source api.",
         ),
       });
 
@@ -660,7 +644,7 @@ const CodexBarPrefsPage = GObject.registerClass(
             // Antigravity SSL certificate setup instruction
             const certLabel = new Gtk.Label({
               label: _(
-                "💡 Antigravity requires a trusted local SSL certificate to work. Run this command in terminal to set it up:\n\npip install codexbar-ssl-helper && codexbar-ssl-helper",
+                "💡 Antigravity requires a trusted local SSL certificate to work. So we have made a python script to help you do this in a single command:\n\npip install codexbar-ssl-helper && codexbar-ssl-helper",
               ),
               xalign: 0,
               use_markup: false,
@@ -729,7 +713,7 @@ const CodexBarPrefsPage = GObject.registerClass(
       // 3. Add Custom Provider Button
       const addBtnRow = new Adw.ActionRow({
         title: _("Add Custom Provider"),
-        subtitle: _("Specify a name and a codexbar CLI command"),
+        subtitle: _("The extension should parse it correctly."),
       });
 
       const addBtn = new Gtk.Button({

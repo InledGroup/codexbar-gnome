@@ -14,30 +14,7 @@ import { calculateUsagePace, UsageApiClient } from "./usageApi.js";
 import { loadToken, nullTokenSchema } from "./secret.js";
 
 function logDev(msg) {
-  try {
-    const logFile = GLib.build_filenamev([
-      GLib.get_user_cache_dir(),
-      "codexbar-extension-dev.log",
-    ]);
-    let content = "";
-    if (GLib.file_test(logFile, GLib.FileTest.EXISTS)) {
-      try {
-        let [success, rawContent] = GLib.file_get_contents(logFile);
-        if (success) {
-          content = new TextDecoder().decode(rawContent);
-        }
-      } catch (e) {}
-    }
-    const timestamp = new Date().toLocaleTimeString();
-    const line = `[${timestamp}] ${msg}`;
-    let lines = (content + line + "\n").split("\n");
-    if (lines.length > 1000) {
-      lines = lines.slice(lines.length - 1000);
-    }
-    GLib.file_set_contents(logFile, lines.join("\n"));
-  } catch (e) {
-    // Ignore logging failures silently
-  }
+  console.log(`[CodexBar] ${msg}`);
 }
 
 /**
@@ -138,53 +115,19 @@ export default class CodexBarExtension extends Extension {
 
     // Standard signal handling
     // Manejo estándar de señales 
-    this._signals = [];
-    this._signals.push(
-      this._settings.connect("changed::providers", () =>
-        this._onSettingsChanged(),
-      ),
+    this._settings.connectObject(
+      "changed::providers", () => this._onSettingsChanged(),
+      "changed::refresh-interval", () => this._onSettingsChanged(),
+      "changed::display-mode", () => this._updateUI(),
+      "changed::show-logos", () => this._updateUI(),
+      "changed::show-pacing-info", () => this._updateUI(),
+      "changed::first-run", () => this._updateUI(),
+      "changed::dev-custom-output-enabled", () => this._onSettingsChanged(),
+      "changed::dev-custom-output-provider-name", () => this._onSettingsChanged(),
+      "changed::dev-custom-output-json", () => this._onSettingsChanged(),
+      this
     );
-    this._signals.push(
-      this._settings.connect("changed::refresh-interval", () =>
-        this._onSettingsChanged(),
-      ),
-    );
-    this._signals.push(
-      this._settings.connect("changed::display-mode", () => this._updateUI()),
-    );
-    this._signals.push(
-      this._settings.connect("changed::show-logos", () => this._updateUI()),
-    );
-    this._signals.push(
-      this._settings.connect("changed::show-pacing-info", () => this._updateUI()),
-    );
-    this._signals.push(
-      this._settings.connect("changed::first-run", () => this._updateUI()),
-    );
-    this._signals.push(
-      this._settings.connect("changed::dev-custom-output-enabled", () =>
-        this._onSettingsChanged(),
-      ),
-    );
-    this._signals.push(
-      this._settings.connect("changed::dev-custom-output-provider-name", () =>
-        this._onSettingsChanged(),
-      ),
-    );
-    this._signals.push(
-      this._settings.connect("changed::dev-custom-output-json", () =>
-        this._onSettingsChanged(),
-      ),
-    );
-    this._signals.push(
-      this._settings.connect("changed::dev-show-log-window", () =>
-        this._updateLogWindow(),
-      ),
-    );
-
-    this._logWindowProcess = null;
     this._onSettingsChanged();
-    this._updateLogWindow();
   }
 
   /**
@@ -220,8 +163,7 @@ export default class CodexBarExtension extends Extension {
     // Step 4: Disconnect all settings signals
     // Paso 4: Desconectar todas las señales de configuración
     if (this._settings) {
-      this._signals.forEach((id) => this._settings.disconnect(id));
-      this._signals = [];
+      this._settings.disconnectObject(this);
       this._settings = null;
     }
 
@@ -265,14 +207,6 @@ export default class CodexBarExtension extends Extension {
     // Paso 7: Liberar referencias de esquemas para prevenir fugas de memoria
     nullTokenSchema();
 
-    // Step 8: Clean up developer log window
-    // Paso 8: Limpiar la ventana de registro de desarrolladores
-    if (this._logWindowProcess) {
-      try {
-        this._logWindowProcess.force_exit();
-      } catch (e) {}
-      this._logWindowProcess = null;
-    }
   }
 
   /**
@@ -317,45 +251,7 @@ export default class CodexBarExtension extends Extension {
     }
   }
 
-  _updateLogWindow() {
-    const showLogWindow = this._settings.get_boolean("dev-show-log-window");
-    if (showLogWindow) {
-      if (!this._logWindowProcess) {
-        try {
-          const logWindowScript = GLib.build_filenamev([
-            this.path,
-            "log_window.js",
-          ]);
-          this._logWindowProcess = Gio.Subprocess.new(
-            ["gjs", "-m", logWindowScript],
-            Gio.SubprocessFlags.NONE
-          );
-          
-          this._logWindowProcess.wait_async(null, (proc, res) => {
-            try {
-              proc.wait_finish(res);
-            } catch (e) {}
-            this._logWindowProcess = null;
-            if (this._settings) {
-              this._settings.set_boolean("dev-show-log-window", false);
-            }
-          });
-          
-          logDev("Developer Log Window started.");
-        } catch (e) {
-          logDev(`Failed to launch log window: ${e.message}`);
-        }
-      }
-    } else {
-      if (this._logWindowProcess) {
-        try {
-          this._logWindowProcess.force_exit();
-        } catch (e) {}
-        this._logWindowProcess = null;
-        logDev("Developer Log Window stopped.");
-      }
-    }
-  }
+ 
 
   /**
    * Refresh usage data for all enabled providers.

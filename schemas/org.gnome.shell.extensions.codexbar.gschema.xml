@@ -42,9 +42,5 @@
       <default>'[]'</default>
       <summary>Developer mock JSON output</summary>
     </key>
-    <key name="dev-show-log-window" type="b">
-      <default>false</default>
-      <summary>Whether to show a separate developer log window</summary>
-    </key>
   </schema>
 </schemalist>
