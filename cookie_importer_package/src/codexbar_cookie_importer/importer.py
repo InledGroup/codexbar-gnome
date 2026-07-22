@@ -188,7 +188,11 @@ def is_plausible_cookie_value(name, value):
     if not re.fullmatch(r"[\x21\x23-\x2b\x2d-\x3a\x3c-\x5b\x5d-\x7e]+", value):
         return False
 
-    if "session-token" in name and len(value) < 100:
+    # A chunked NextAuth session token may end with a short final chunk (for
+    # example, ``__Secure-next-auth.session-token.1``). Only enforce the
+    # minimum length for an unchunked token; dropping a short chunk makes the
+    # reconstructed cookie invalid.
+    if "session-token" in name and not re.search(r"\.\d+$", name) and len(value) < 100:
         return False
 
     return True
