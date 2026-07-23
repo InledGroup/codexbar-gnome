@@ -2,6 +2,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
 import { SoupApiFetcher } from './adapters/SoupApiFetcher.js';
+import { OllamaSettingsFetcher } from './adapters/OllamaSettingsFetcher.js';
 
 import { CliSubprocessFetcher } from './adapters/CliSubprocessFetcher.js';
 
@@ -177,14 +178,27 @@ export class UsageApiClient {
         this._session = new Soup.Session();
         this._session.set_timeout(30);
         this._soupFetcher = new SoupApiFetcher(this._session);
+        this._ollamaFetcher = new OllamaSettingsFetcher(this._session);
         this._cliFetcher = new CliSubprocessFetcher(extensionPath);
     }
 
     /**
-     * Fetch usage summary from OpenAI API.
-     * Obtiene el resumen de uso desde la API de OpenAI.
+     * Fetch usage summary from a direct API provider.
+     * Obtiene el resumen de uso desde un proveedor de API directa.
+     *
+     * @param {string} cookies - Session cookies for authentication.
+     *                            Cookies de sesión para autenticación.
+     * @param {string} providerId - Provider identifier ('codex' or 'ollama').
+     *                              Identificador del proveedor ('codex' o 'ollama').
+     * @param {Gio.Cancellable|null} cancellable - Cancellable for the request.
+     *                                               Cancelable para la petición.
      */
-    async fetchSummary(cookies, cancellable = null) {
+    async fetchSummary(cookies, providerId = 'codex', cancellable = null) {
+        if (providerId === 'ollama') {
+            const usagePayload = await this._ollamaFetcher.fetch(cookies, { cancellable });
+            return usagePayload;
+        }
+
         const usagePayload = await this._soupFetcher.fetch(cookies, { cancellable });
         return this.normalizeSummary(usagePayload);
     }

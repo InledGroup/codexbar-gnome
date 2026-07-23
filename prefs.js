@@ -21,6 +21,7 @@ import {
  */
 const PREDEFINED_PROVIDERS = [
   { id: "codex", name: "Codex", useApi: true, defaultCommand: "" },
+  { id: "ollama", name: "Ollama Cloud", useApi: true, defaultCommand: "" },
   {
     id: "claude",
     name: "Claude",
@@ -548,10 +549,10 @@ const CodexBarPrefsPage = GObject.registerClass(
           row._tokenEntry = tokenEntry;
 
           const importBtn = new Gtk.Button({
-            label: _("Auto-Login from Browser (Codex Only)"),
+            label: _("Auto-Login from Browser"),
             margin_top: 6,
             tooltip_text: _(
-              "Uses a local Python script to extract cookies from Chrome/Brave. Works only for Codex.",
+              "Uses a local Python script to extract cookies from Chrome/Brave for this provider.",
             ),
           });
 
@@ -574,7 +575,7 @@ const CodexBarPrefsPage = GObject.registerClass(
 
           box.append(
             new Gtk.Label({
-              label: _("Session Cookies (Codex):"),
+              label: _("Session Cookies:"),
               xalign: 0,
               css_classes: ["caption"],
             }),
@@ -872,6 +873,10 @@ const CodexBarPrefsPage = GObject.registerClass(
           // Try executing as module / Intentar ejecutar como módulo
           argv = ["/usr/bin/python3", "-m", "codexbar_cookie_importer"];
         }
+      }
+
+      if (providerId === "ollama") {
+        argv.push("--provider", "ollama");
       }
 
       try {

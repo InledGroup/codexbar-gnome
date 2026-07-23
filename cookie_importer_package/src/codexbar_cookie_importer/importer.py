@@ -16,8 +16,26 @@ except ImportError:
     HAS_DEPS = False
 
 CHROMIUM_SECRET_SCHEMA = "chrome_libsecret_os_crypt_password_v2"
+GENERIC_SECRET_SCHEMA = "org.freedesktop.Secret.Generic"
 
-def get_keys(label_hints, app_names=None):
+PROVIDER_CONFIGS = {
+    "codex": {
+        "display_name": "ChatGPT/OpenAI",
+        "domains": ["chatgpt.com", "openai.com"],
+        "targets": ["session-token", "oai-did", "oai-sc", "cf_clearance", "_cf_bm", "oai-is", "oai-allow", "oai-chat-web-route", "oai-client-auth-info"],
+        "required_cookie": "session-token",
+        "priority_cookies": ["session-token"],
+    },
+    "ollama": {
+        "display_name": "Ollama",
+        "domains": ["ollama.com"],
+        "targets": [],
+        "required_cookie": None,
+        "priority_cookies": ["session", "auth", "token"],
+    },
+}
+
+def get_keys(label_hints, app_names=None, app_ids=None):
     """
     Retrieve decryption keys from the Linux keyring (D-Bus / SecretStorage).
     Recupera las claves de descifrado del llavero de Linux (D-Bus / SecretStorage).
@@ -26,6 +44,7 @@ def get_keys(label_hints, app_names=None):
     seen = set()
     errors = []
     app_names = {name.lower() for name in (app_names or [])}
+    app_ids = {app_id.lower() for app_id in (app_ids or [])}
 
     def add_secret(secret):
         if secret not in seen:
@@ -38,8 +57,11 @@ def get_keys(label_hints, app_names=None):
         except Exception:
             attrs = {}
         app = attrs.get("application", "").lower()
+        app_id = attrs.get("app_id", "").lower()
         schema = attrs.get("xdg:schema", "")
         if app in app_names and schema == CHROMIUM_SECRET_SCHEMA:
+            return 0
+        if app_id in app_ids and schema in {CHROMIUM_SECRET_SCHEMA, GENERIC_SECRET_SCHEMA}:
             return 0
 
         label = item.get_label().lower()
@@ -93,6 +115,17 @@ def get_keys(label_hints, app_names=None):
                     add_secret(item.get_secret())
             except Exception as e:
                 errors.append(f"search {app_name}: {e}")
+
+        for app_id in app_ids:
+            for schema in (CHROMIUM_SECRET_SCHEMA, GENERIC_SECRET_SCHEMA):
+                try:
+                    for item in secretstorage.search_items(bus, {
+                        "app_id": app_id,
+                        "xdg:schema": schema,
+                    }):
+                        add_secret(item.get_secret())
+                except Exception as e:
+                    errors.append(f"search {app_id}: {e}")
 
         try:
             scan_collection(secretstorage.get_default_collection(bus))
@@ -197,13 +230,18 @@ def is_plausible_cookie_value(name, value):
 
     return True
 
-def extract_tokens():
+def extract_tokens(provider="codex"):
     """
-    Extract OpenAI/ChatGPT cookies from local browser profiles.
-    Extrae cookies de OpenAI/ChatGPT de los perfiles de los navegadores locales.
+    Extract provider cookies from local browser profiles.
+    Extrae cookies del proveedor desde los perfiles de los navegadores locales.
     """
     if not HAS_DEPS:
         return {"error": "DEPENDENCIES_MISSING"}
+
+    provider = (provider or "codex").lower()
+    config = PROVIDER_CONFIGS.get(provider)
+    if not config:
+        return {"error": "UNSUPPORTED_PROVIDER", "details": f"Unsupported provider: {provider}"}
 
     browsers = [
         {
@@ -224,17 +262,29 @@ def extract_tokens():
             "key_labels": ["Chromium Safe Storage", "Application key for org.chromium.Chromium"],
             "app_names": ["chromium"],
         },
+        {
+            "name": "Vivaldi",
+            "path": "~/.config/vivaldi/*/Cookies",
+            "key_labels": ["Vivaldi Safe Storage"],
+            "app_names": ["vivaldi"],
+        },
+        {
+            "name": "Vivaldi Flatpak",
+            "path": "~/.var/app/com.vivaldi.Vivaldi/config/vivaldi/*/Cookies",
+            "key_labels": ["Vivaldi Safe Storage", "Chrome Safe Storage"],
+            "app_names": ["vivaldi", "com.vivaldi.Vivaldi", "chrome"],
+            "app_ids": ["com.vivaldi.Vivaldi"],
+        },
     ]
 
-    # Target cookies (broaden to ensure session validity) / Cookies de destino (ampliar para asegurar la validez de la sesión)
-    targets = ["session-token", "oai-did", "oai-sc", "cf_clearance", "_cf_bm", "oai-is", "oai-allow", "oai-chat-web-route", "oai-client-auth-info"]
+    targets = config["targets"]
     
     all_cookies = {}
     dbus_errors = []
     encrypted_targets = 0
     
     for browser in browsers:
-        keys, dbus_err = get_keys(browser["key_labels"], browser.get("app_names"))
+        keys, dbus_err = get_keys(browser["key_labels"], browser.get("app_names"), browser.get("app_ids"))
         if dbus_err:
             dbus_errors.append(f"{browser['name']}: {dbus_err}")
             
@@ -256,10 +306,12 @@ def extract_tokens():
                 conn = sqlite3.connect(f"file:{temp_db}?mode=ro", uri=True)
                 cursor = conn.cursor()
                 
-                cursor.execute("SELECT name, value, encrypted_value FROM cookies WHERE host_key LIKE '%chatgpt.com%' OR host_key LIKE '%openai.com%'")
+                where = " OR ".join(["host_key LIKE ?" for _domain in config["domains"]])
+                params = [f"%{domain}%" for domain in config["domains"]]
+                cursor.execute(f"SELECT name, value, encrypted_value FROM cookies WHERE {where}", params)
                 
                 for name, value, enc_val in cursor.fetchall():
-                    if not any(t in name for t in targets):
+                    if targets and not any(t in name for t in targets):
                         continue
 
                     if enc_val:
@@ -285,24 +337,25 @@ def extract_tokens():
                     os.remove(temp_db)
 
     if not all_cookies:
-        details = "Found no valid session tokens. Please ensure you are logged in."
+        details = f"Found no valid {config['display_name']} cookies. Please ensure you are logged in."
         if encrypted_targets:
             details += (
-                f"\n\nFound {encrypted_targets} encrypted ChatGPT/OpenAI cookies, "
+                f"\n\nFound {encrypted_targets} encrypted {config['display_name']} cookies, "
                 "but none could be decrypted with the available browser keyring keys."
             )
         if dbus_errors:
             details += "\n\nKeyring access errors (D-Bus):\n" + "\n".join(dbus_errors)
         return {"error": "SESSION_NOT_FOUND", "details": details}
 
-    found_session = any("session-token" in name for name in all_cookies)
-    if not found_session:
-         return {"error": "SESSION_NOT_FOUND", "details": "Found some cookies but no session token. Please log in."}
+    required_cookie = config.get("required_cookie")
+    if required_cookie and not any(required_cookie in name for name in all_cookies):
+         return {"error": "SESSION_NOT_FOUND", "details": f"Found some cookies but no {required_cookie}. Please log in."}
 
     # Format the cookie header / Dar formato a la cabecera de la cookie
-    # Priority: session-token, then others / Prioridad: session-token, luego otros
-    session_parts = [f"{name}={val}" for name, val in sorted(all_cookies.items()) if "session-token" in name]
-    other_parts = [f"{name}={val}" for name, val in sorted(all_cookies.items()) if "session-token" not in name]
+    # Priority cookies first, then others / Cookies prioritarias primero, luego otras
+    priority_cookies = config.get("priority_cookies", [])
+    session_parts = [f"{name}={val}" for name, val in sorted(all_cookies.items()) if any(priority in name for priority in priority_cookies)]
+    other_parts = [f"{name}={val}" for name, val in sorted(all_cookies.items()) if not any(priority in name for priority in priority_cookies)]
     
     cookie_parts = session_parts + other_parts
     
