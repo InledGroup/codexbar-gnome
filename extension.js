@@ -351,7 +351,7 @@ export default class CodexBarExtension extends Extension {
             this._providersData[i] = { error: _("No token found in keyring") };
             continue;
           }
-          data = await this._apiClient.fetchSummary(token, this._cancellable);
+          data = await this._apiClient.fetchSummary(token, provider.id, this._cancellable);
 
           // Generate dynamic labels based on window durations
           // Generar etiquetas dinámicas basadas en las duraciones de las ventanas

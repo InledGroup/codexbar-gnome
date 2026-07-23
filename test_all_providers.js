@@ -370,3 +370,36 @@ if (normalizedZen.usage.providerCost.period !== "Zen balance") {
   throw new Error(`Expected providerCost.period to be 'Zen balance', got '${normalizedZen.usage.providerCost.period}'`);
 }
 console.log("✓ OpenCode Go Zen providerCost normalizes correctly");
+
+// Ollama Cloud HTML parser test
+const { OllamaSettingsFetcher } = await import("./adapters/OllamaSettingsFetcher.js");
+const ollamaFetcher = new OllamaSettingsFetcher();
+const ollamaHtml = `
+  <main>
+    <h2>Cloud Usage</h2>
+    <div>Plan: Pro</div>
+    <section>
+      <h3>Session usage</h3>
+      <span>12.5%</span>
+      <span>resets in 2 hours</span>
+    </section>
+    <section>
+      <h3>Weekly usage</h3>
+      <span>54.2%</span>
+      <span>resets in 6 days, 3 hours</span>
+    </section>
+  </main>`;
+const ollamaSummary = ollamaFetcher._parseSettingsHtml(ollamaHtml);
+if (ollamaSummary.labels[0] !== "Session" || ollamaSummary.labels[1] !== "Weekly") {
+  throw new Error("Ollama labels should be Session and Weekly");
+}
+if (ollamaSummary.usage.primary.usedPercent !== 12.5) {
+  throw new Error(`Expected Ollama session usage 12.5%, got ${ollamaSummary.usage.primary.usedPercent}%`);
+}
+if (ollamaSummary.usage.secondary.usedPercent !== 54.2) {
+  throw new Error(`Expected Ollama weekly usage 54.2%, got ${ollamaSummary.usage.secondary.usedPercent}%`);
+}
+if (ollamaSummary.usage.loginMethod !== "Ollama Cloud Pro") {
+  throw new Error(`Expected Ollama Cloud Pro login method, got ${ollamaSummary.usage.loginMethod}`);
+}
+console.log("✓ Ollama Cloud HTML parser extracts Session and Weekly usage");
