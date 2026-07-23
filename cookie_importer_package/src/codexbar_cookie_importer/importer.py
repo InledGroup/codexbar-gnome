@@ -29,7 +29,7 @@ PROVIDER_CONFIGS = {
     "ollama": {
         "display_name": "Ollama",
         "domains": ["ollama.com"],
-        "targets": [],
+        "targets": ["session", "auth", "token", "csrf", "intercom"],
         "required_cookie": None,
         "priority_cookies": ["session", "auth", "token"],
     },

@@ -120,7 +120,7 @@ export class OllamaSettingsFetcher extends UsageFetcher {
         const hasCloudUsage = lowerText.includes('cloud usage');
         const hasUsageWindow = lowerText.includes('session') && lowerText.includes('weekly');
 
-        if (!hasCloudUsage && !hasUsageWindow) {
+        if (!hasCloudUsage || !hasUsageWindow) {
             const looksLoggedOut = /\b(sign in|log in|login|create account)\b/i.test(text) || /href=["'][^"']*\/(signin|login)/i.test(html);
             const message = looksLoggedOut
                 ? 'Ollama Cloud authentication failed. Please import fresh ollama.com cookies.'
@@ -244,6 +244,7 @@ export class OllamaSettingsFetcher extends UsageFetcher {
      * Extrae un fragmento de texto alrededor de una coincidencia regex.
      */
     _chunkAround(value, regex, radius) {
+        regex.lastIndex = 0;
         const match = regex.exec(value);
         if (!match) return '';
 
@@ -286,8 +287,9 @@ export class OllamaSettingsFetcher extends UsageFetcher {
             chunk.match(/(?:limit|window|session)[^\d]{0,30}(\d+)\s*(?:-|\s)?\s*hour/i);
         if (hourMatch) return parseInt(hourMatch[1], 10) * 3600;
 
+        if (fallbackWindowSeconds) return fallbackWindowSeconds;
         if (/\bweekly\b/i.test(chunk)) return 7 * 24 * 3600;
-        return fallbackWindowSeconds;
+        return 0;
     }
 
     /**
