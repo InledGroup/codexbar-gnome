@@ -66,7 +66,7 @@ export default class CodexBarExtension extends Extension {
     // Contenedor del icono con relleno de progreso
     this._iconBox = new St.BoxLayout({
       style_class: "codexbar-panel-icon-box",
-      vertical: false,
+      orientation: Clutter.Orientation.HORIZONTAL,
       y_align: Clutter.ActorAlign.CENTER,
     });
     this._iconFill = new St.Widget({
@@ -82,7 +82,7 @@ export default class CodexBarExtension extends Extension {
     // Sección de cabecera del menú desplegable (el que aparece cuando clicas)
     this._headerBox = new St.BoxLayout({
       style_class: "codexbar-header",
-      vertical: false,
+      orientation: Clutter.Orientation.HORIZONTAL,
       x_expand: true,
     });
     this._headerTitle = new St.Label({
@@ -121,14 +121,14 @@ export default class CodexBarExtension extends Extension {
     // Pestañas para cambiar entre diferentes proveedores
     this._tabsContainer = new St.BoxLayout({
       style_class: "codexbar-tabs-container",
-      vertical: false,
+      orientation: Clutter.Orientation.HORIZONTAL,
     });
     this._indicator.menu.box.add_child(this._tabsContainer);
 
     // Main content area for usage stats
     // Área de contenido principal para las estadísticas de uso
     this._contentBox = new St.BoxLayout({
-      vertical: true,
+      orientation: Clutter.Orientation.VERTICAL,
       style_class: "codexbar-usage-section",
     });
     this._indicator.menu.box.add_child(this._contentBox);
@@ -608,7 +608,7 @@ export default class CodexBarExtension extends Extension {
       });
 
       let btnBin = new St.BoxLayout({
-        vertical: false,
+        orientation: Clutter.Orientation.HORIZONTAL,
         y_align: Clutter.ActorAlign.CENTER,
       });
       btn.set_child(btnBin);
@@ -686,7 +686,10 @@ export default class CodexBarExtension extends Extension {
     // Show error if any
     // Mostrar error si existe
     if (activeData.error) {
-      let errorBox = new St.BoxLayout({ vertical: true, x_expand: true });
+      let errorBox = new St.BoxLayout({
+        orientation: Clutter.Orientation.VERTICAL,
+        x_expand: true,
+      });
 
       let title = new St.Label({
         text: _("Error: %s").format(activeData.error),
@@ -734,7 +737,10 @@ export default class CodexBarExtension extends Extension {
     // Account information
     // Información de la cuenta
     if (usage.accountEmail) {
-      let accountBox = new St.BoxLayout({ vertical: true, margin_bottom: 15 });
+      let accountBox = new St.BoxLayout({
+        orientation: Clutter.Orientation.VERTICAL,
+        margin_bottom: 15,
+      });
       accountBox.add_child(
         new St.Label({
           text: activeProvider.name,
@@ -745,7 +751,7 @@ export default class CodexBarExtension extends Extension {
       let accText = usage.accountEmail;
       if (usage.loginMethod) accText += ` (${usage.loginMethod})`;
       const accountDetails = new St.BoxLayout({
-        vertical: false,
+        orientation: Clutter.Orientation.HORIZONTAL,
         x_expand: true,
       });
       accountDetails.add_child(subtitleLabel({ text: accText }));
@@ -850,8 +856,10 @@ export default class CodexBarExtension extends Extension {
         progressContainer.add_child(progressBar);
         this._contentBox.add_child(progressContainer);
 
-        const statsBox = new St.BoxLayout({ vertical: false, x_expand: true });
-        statsBox.add_child(subtitleLabel({ text: labelText }));
+        const statsBox = new St.BoxLayout({
+          orientation: Clutter.Orientation.HORIZONTAL,
+          x_expand: true,
+        });
         statsBox.add_child(
           subtitleLabel({
             text: tierData.resetDescription || "",
@@ -866,7 +874,10 @@ export default class CodexBarExtension extends Extension {
           const pace = calculateUsagePace(tierData);
           if (pace) {
             const roundedReserve = Math.round(pace.reservePercent);
-            const paceBox = new St.BoxLayout({ vertical: false, x_expand: true });
+            const paceBox = new St.BoxLayout({
+              orientation: Clutter.Orientation.HORIZONTAL,
+              x_expand: true,
+            });
             paceBox.add_child(
               subtitleLabel({
                 text:
@@ -900,7 +911,7 @@ export default class CodexBarExtension extends Extension {
     if (usage.rateLimitResetCredits?.availableCount !== undefined) {
       const creditCount = usage.rateLimitResetCredits.availableCount;
       const creditsBox = new St.BoxLayout({
-        vertical: true,
+        orientation: Clutter.Orientation.VERTICAL,
         style_class: "codexbar-reset-credits",
         x_expand: true,
       });
@@ -923,7 +934,7 @@ export default class CodexBarExtension extends Extension {
 
     if (!hasTiers && usage.providerCost) {
       let costBox = new St.BoxLayout({
-        vertical: true,
+        orientation: Clutter.Orientation.VERTICAL,
         style_class: "codexbar-cost-container",
         x_expand: true,
       });
@@ -984,14 +995,14 @@ export default class CodexBarExtension extends Extension {
     if (sections.length === 0) return;
 
     const detailsBox = new St.BoxLayout({
-      vertical: true,
+      orientation: Clutter.Orientation.VERTICAL,
       style_class: "codexbar-details-section",
       x_expand: true,
     });
 
     sections.forEach((section) => {
       const groupBox = new St.BoxLayout({
-        vertical: true,
+        orientation: Clutter.Orientation.VERTICAL,
         style_class: "codexbar-detail-group",
         x_expand: true,
       });
@@ -1006,7 +1017,10 @@ export default class CodexBarExtension extends Extension {
       }
 
       section.rows.forEach((row) => {
-        const rowBox = new St.BoxLayout({ vertical: false, x_expand: true });
+        const rowBox = new St.BoxLayout({
+          orientation: Clutter.Orientation.HORIZONTAL,
+          x_expand: true,
+        });
 
         const labelWidget = new St.Label({
           text: row.label,
@@ -1083,7 +1097,7 @@ export default class CodexBarExtension extends Extension {
    */
   _createCommandWithCopyButton(commandText) {
     let box = new St.BoxLayout({
-      vertical: false,
+      orientation: Clutter.Orientation.HORIZONTAL,
       x_expand: true,
       style:
         "background-color: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; margin-top: 4px; spacing: 8px;",
@@ -1132,7 +1146,7 @@ export default class CodexBarExtension extends Extension {
    */
   _showWelcomeScreen(codexbarExists, importerExists) {
     let box = new St.BoxLayout({
-      vertical: true,
+      orientation: Clutter.Orientation.VERTICAL,
       x_expand: true,
       style: "padding: 12px; spacing: 10px;",
     });
@@ -1154,11 +1168,13 @@ export default class CodexBarExtension extends Extension {
     // --- Dependency 1: CodexBar CLI ---
     // --- Dependencia 1: CodexBar CLI ---
     let dep1Box = new St.BoxLayout({
-      vertical: true,
+      orientation: Clutter.Orientation.VERTICAL,
       style:
         "margin-bottom: 10px; background-color: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px;",
     });
-    let dep1Header = new St.BoxLayout({ vertical: false });
+    let dep1Header = new St.BoxLayout({
+      orientation: Clutter.Orientation.HORIZONTAL,
+    });
 
     let dep1StatusColor = codexbarExists ? "#2ec27e" : "#e01b24";
     let dep1StatusText = codexbarExists ? _("● Installed") : _("● Missing");
@@ -1195,11 +1211,13 @@ export default class CodexBarExtension extends Extension {
     // --- Dependency 2: Cookie Importer for codex ---
     // --- Dependencia 2: Importador de Cookies para codex---
     let dep2Box = new St.BoxLayout({
-      vertical: true,
+      orientation: Clutter.Orientation.VERTICAL,
       style:
         "margin-bottom: 10px; background-color: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px;",
     });
-    let dep2Header = new St.BoxLayout({ vertical: false });
+    let dep2Header = new St.BoxLayout({
+      orientation: Clutter.Orientation.HORIZONTAL,
+    });
 
     let dep2StatusColor = importerExists ? "#2ec27e" : "#ff7800";
     let dep2StatusText = importerExists
@@ -1240,11 +1258,13 @@ export default class CodexBarExtension extends Extension {
     // --- Dependency 3: SSL Helper (for Antigravity) ---
     // --- Dependencia 3: Asistente SSL (para Antigravity) ---
     let dep3Box = new St.BoxLayout({
-      vertical: true,
+      orientation: Clutter.Orientation.VERTICAL,
       style:
         "margin-bottom: 10px; background-color: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px;",
     });
-    let dep3Header = new St.BoxLayout({ vertical: false });
+    let dep3Header = new St.BoxLayout({
+      orientation: Clutter.Orientation.HORIZONTAL,
+    });
 
     // Verify if the certificate is already installed/trusted
     const systemCaCertsPath = "/usr/local/share/ca-certificates/antigravity.crt";
@@ -1290,7 +1310,7 @@ export default class CodexBarExtension extends Extension {
     // --- Buttons ---
     // --- Botones ---
     let btnBox = new St.BoxLayout({
-      vertical: false,
+      orientation: Clutter.Orientation.HORIZONTAL,
       style: "margin-top: 10px;",
       x_align: Clutter.ActorAlign.CENTER,
     });
