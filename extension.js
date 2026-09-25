@@ -14,6 +14,7 @@ import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import {
   calculateUsagePace,
   deriveCreditsPercent,
+  formatPanelText,
   normalizeDetailSections,
   UsageApiClient,
 } from "./usageApi.js";
@@ -76,7 +77,18 @@ export default class CodexBarExtension extends Extension {
       width: 0,
     });
     this._iconBox.add_child(this._iconFill);
-    this._indicator.add_child(this._iconBox);
+
+    // Per-provider text ("5h 3% · W 22% in 3h 15m"), shown instead of the
+    // bar when any provider is flagged showInPanel.
+    this._panelTextBox = new St.BoxLayout({
+      vertical: false,
+      y_align: Clutter.ActorAlign.CENTER,
+      visible: false,
+    });
+    this._panelBox = new St.BoxLayout({ vertical: false });
+    this._panelBox.add_child(this._iconBox);
+    this._panelBox.add_child(this._panelTextBox);
+    this._indicator.add_child(this._panelBox);
 
     // Header section of the popup menu
     // Sección de cabecera del menú desplegable (el que aparece cuando clicas)
@@ -156,6 +168,12 @@ export default class CodexBarExtension extends Extension {
       this
     );
     this._onSettingsChanged();
+
+    // Keep the panel's reset countdown ticking between refreshes.
+    this._panelTickId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 60, () => {
+      this._updatePanel();
+      return GLib.SOURCE_CONTINUE;
+    });
   }
 
   /**
@@ -182,6 +200,10 @@ export default class CodexBarExtension extends Extension {
     if (this._timeoutId) {
       GLib.source_remove(this._timeoutId);
       this._timeoutId = null;
+    }
+    if (this._panelTickId) {
+      GLib.source_remove(this._panelTickId);
+      this._panelTickId = null;
     }
     if (this._copyTimeouts) {
       this._copyTimeouts.forEach((id) => GLib.source_remove(id));
@@ -225,6 +247,8 @@ export default class CodexBarExtension extends Extension {
       this._indicator.destroy();
       this._indicator = null;
     }
+    this._panelTextBox = null;
+    this._panelBox = null;
 
     // Step 6: Nullify remaining references to prevent memory leaks
     // Paso 6: Anular referencias restantes para prevenir fugas de memoria
@@ -497,10 +521,61 @@ export default class CodexBarExtension extends Extension {
     }
 
     if (this._cancellable && !this._cancellable.is_cancelled()) {
+      // ponytail: one stamp for the whole sequential fetch; skews the panel
+      // countdown by the fetch duration (seconds), stamp per provider if that matters.
+      const fetchedAt = Date.now();
+      this._providersData.forEach((d) => {
+        if (d) d.fetchedAt = fetchedAt;
+      });
       this._loading = false;
       if (this._headerTitle) this._headerTitle.set_text(_("CodexBar"));
       this._updateUI();
     }
+  }
+
+  /**
+   * Render the panel text for providers flagged showInPanel, or fall back to
+   * the usage bar when none are.
+   */
+  _updatePanel() {
+    if (!this._panelTextBox) return;
+
+    const shown = (this._providers || [])
+      .map((provider, index) => ({ provider, entry: this._providersData[index] }))
+      .filter(({ provider }) => provider.showInPanel);
+
+    this._iconBox.visible = shown.length === 0;
+    this._panelTextBox.visible = shown.length > 0;
+    this._panelTextBox.destroy_all_children();
+
+    const displayMode = this._settings.get_string("display-mode");
+    shown.forEach(({ provider, entry }) => {
+      const segment = new St.BoxLayout({
+        vertical: false,
+        style_class: "codexbar-panel-segment",
+      });
+      const logo = this._getProviderLogo(
+        provider.id || provider.name.toLowerCase(),
+      );
+      if (logo) {
+        logo.set_style_class_name("codexbar-panel-logo");
+        segment.add_child(logo);
+      }
+
+      let text;
+      if (!entry) text = "…";
+      else if (entry.error) text = "!";
+      else {
+        const elapsed = (Date.now() - (entry.fetchedAt || Date.now())) / 1000;
+        text = formatPanelText(entry.data?.usage, displayMode, elapsed) || "–";
+      }
+      if (!logo) text = `${provider.name} ${text}`;
+
+      segment.add_child(
+        new St.Label({ text, y_align: Clutter.ActorAlign.CENTER }),
+      );
+      this._panelTextBox.add_child(segment);
+    });
   }
 
   /**
@@ -542,6 +617,7 @@ export default class CodexBarExtension extends Extension {
   _updateUI() {
     if (!this._indicator) return;
 
+    this._updatePanel();
     this._tabsContainer.destroy_all_children();
     this._contentBox.destroy_all_children();
 

@@ -1,6 +1,7 @@
 import {
   calculateUsagePace,
   deriveCreditsPercent,
+  formatPanelText,
   formatResetDescription,
   normalizeDetailSections,
   UsageApiClient,
@@ -302,6 +303,26 @@ if (laterWeeklyReset !== `Resets at ${laterDateTime} (in 48h)`) {
 console.log(
   "✓ Weekly reset dates are shown only when the reset is on another day",
 );
+
+const panelUsage = {
+  primary: { usedPercent: 3.4, windowSeconds: 5 * 3600, resetAfterSeconds: 3 * 3600 + 15 * 60 },
+  secondary: { usedPercent: 22, windowSeconds: 7 * 24 * 3600, resetAfterSeconds: 3 * 24 * 3600 },
+  tertiary: { usedPercent: 50, windowSeconds: 7 * 24 * 3600 },
+};
+const panelChecks = [
+  [formatPanelText(panelUsage, "used"), "5h 3% · W 22% in 3h 15m"],
+  [formatPanelText(panelUsage, "remaining"), "5h 97% · W 78% in 3h 15m"],
+  [formatPanelText(panelUsage, "used", 3 * 3600 + 5 * 60), "5h 3% · W 22% in 10m"],
+  [formatPanelText(panelUsage, "used", 4 * 3600), "5h 3% · W 22%"],
+  [formatPanelText({}, "used"), ""],
+  [formatPanelText({ primary: { usedPercent: 0, windowSeconds: 0 } }, "used"), ""],
+];
+panelChecks.forEach(([actual, expected]) => {
+  if (actual !== expected) {
+    throw new Error(`Panel text: expected "${expected}", got "${actual}"`);
+  }
+});
+console.log("✓ Panel text shows short windows and the primary reset countdown");
 
 const screenshotPace = calculateUsagePace({
   usedPercent: 2,

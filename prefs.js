@@ -535,6 +535,7 @@ const CodexBarPrefsPage = GObject.registerClass(
               command: row._commandEntry.get_text(),
               useApi: row._useApi,
               ...(row._source ? { source: row._source } : {}),
+              ...(row._panelCheck.active ? { showInPanel: true } : {}),
             });
 
             if (row._useApi) {
@@ -623,6 +624,17 @@ const CodexBarPrefsPage = GObject.registerClass(
           margin_start: 12,
           margin_end: 12,
         });
+
+        const panelCheck = new Gtk.CheckButton({
+          label: _("Show in panel"),
+          tooltip_text: _(
+            "Show this provider's usage windows as text in the top bar",
+          ),
+          active: !!activeData?.showInPanel,
+        });
+        panelCheck.connect("toggled", saveProviders);
+        row._panelCheck = panelCheck;
+        box.append(panelCheck);
 
         // Show the section the chosen source needs, and keep the command in
         // sync with it. A command the user has hand-edited is left alone -
