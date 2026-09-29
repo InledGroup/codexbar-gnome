@@ -889,7 +889,7 @@ export default class CodexBarExtension extends Extension {
 
         let sep = new St.Widget({
           style:
-            "height: 1px; background-color: rgba(255,255,255,0.05); margin-bottom: 10px; margin-top: 5px;",
+            "height: 1px; background-color: rgba(127,127,127,0.22); margin-bottom: 10px; margin-top: 5px;",
         });
         this._contentBox.add_child(sep);
       }
@@ -1143,7 +1143,7 @@ export default class CodexBarExtension extends Extension {
 
     let copyBtn = new St.Button({
       style:
-        "padding: 2px 6px; background-color: rgba(255,255,255,0.1); border-radius: 3px; font-size: 0.8em; color: #ffffff;",
+        "padding: 2px 6px; background-color: rgba(127,127,127,0.18); border-radius: 3px; font-size: 0.8em;",
       label: _("Copy"),
     });
     copyBtn.connect("clicked", () => {
@@ -1190,7 +1190,7 @@ export default class CodexBarExtension extends Extension {
     box.add_child(
       new St.Label({
         text: _("Please configure your system dependencies:"),
-        style: "font-size: 0.95em; color: #a6e3a1; margin-bottom: 10px;",
+        style: "font-size: 0.95em; color: #2ec27e; margin-bottom: 10px;",
       }),
     );
 
@@ -1199,7 +1199,7 @@ export default class CodexBarExtension extends Extension {
     let dep1Box = new St.BoxLayout({
       vertical: true,
       style:
-        "margin-bottom: 10px; background-color: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px;",
+        "margin-bottom: 10px; background-color: rgba(127,127,127,0.10); padding: 8px; border-radius: 6px;",
     });
     let dep1Header = new St.BoxLayout({ vertical: false });
 
@@ -1221,10 +1221,10 @@ export default class CodexBarExtension extends Extension {
     dep1Box.add_child(dep1Header);
 
     dep1Box.add_child(
-      new St.Label({
+      subtitleLabel({
         text: _("Required to query AI usage metrics."),
         style:
-          "font-size: 0.85em; color: #b5b5b5; margin-bottom: 4px; margin-top: 2px;",
+          "font-size: 0.85em; margin-bottom: 4px; margin-top: 2px;",
       }),
     );
 
@@ -1240,7 +1240,7 @@ export default class CodexBarExtension extends Extension {
     let dep2Box = new St.BoxLayout({
       vertical: true,
       style:
-        "margin-bottom: 10px; background-color: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px;",
+        "margin-bottom: 10px; background-color: rgba(127,127,127,0.10); padding: 8px; border-radius: 6px;",
     });
     let dep2Header = new St.BoxLayout({ vertical: false });
 
@@ -1264,10 +1264,10 @@ export default class CodexBarExtension extends Extension {
     dep2Box.add_child(dep2Header);
 
     dep2Box.add_child(
-      new St.Label({
+      subtitleLabel({
         text: _("Enables browser auto cookie extraction for Codex (ChatGPT). This cookie is used to authenticate on the usage api of OpenAI"),
         style:
-          "font-size: 0.85em; color: #b5b5b5; margin-bottom: 4px; margin-top: 2px;",
+          "font-size: 0.85em; margin-bottom: 4px; margin-top: 2px;",
       }),
     );
 
@@ -1285,7 +1285,7 @@ export default class CodexBarExtension extends Extension {
     let dep3Box = new St.BoxLayout({
       vertical: true,
       style:
-        "margin-bottom: 10px; background-color: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px;",
+        "margin-bottom: 10px; background-color: rgba(127,127,127,0.10); padding: 8px; border-radius: 6px;",
     });
     let dep3Header = new St.BoxLayout({ vertical: false });
 
@@ -1312,10 +1312,10 @@ export default class CodexBarExtension extends Extension {
     dep3Box.add_child(dep3Header);
 
     dep3Box.add_child(
-      new St.Label({
+      subtitleLabel({
         text: _("Required to trust the local Antigravity server certificate. Requires privilegie elevation"),
         style:
-          "font-size: 0.85em; color: #b5b5b5; margin-bottom: 4px; margin-top: 2px;",
+          "font-size: 0.85em; margin-bottom: 4px; margin-top: 2px;",
       }),
     );
 
