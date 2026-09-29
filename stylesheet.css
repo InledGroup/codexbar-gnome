@@ -154,3 +154,12 @@
     font-size: 1.8em;
     font-weight: bold;
 }
+
+.codexbar-panel-segment {
+    spacing: 4px;
+    margin: 0 6px;
+}
+
+.codexbar-panel-logo {
+    icon-size: 16px;
+}
