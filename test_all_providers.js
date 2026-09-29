@@ -741,3 +741,69 @@ if (adoptCustomProviders(null, KNOWN_PROVIDERS).length !== 0) {
   throw new Error("Expected adoptCustomProviders(null) to return an empty list");
 }
 console.log("✓ adoptCustomProviders defends against a malformed provider list");
+
+// Ollama Cloud monthly credit-pool parser test (transparent per-token pricing)
+const ollamaCreditHtml = `
+  <main>
+    <h2>Usage</h2>
+    <div>Plan: Pro</div>
+    <section>
+      <h3>Monthly usage $12.34 of $60 used</h3>
+      <span>Resets in 3 weeks.</span>
+    </section>
+    <section>
+      <h3>Usage credits</h3>
+      <span>$5 Current balance</span>
+    </section>
+  </main>`;
+const ollamaCredit = ollamaFetcher._parseSettingsHtml(ollamaCreditHtml);
+const creditWin = ollamaCredit.usage.primary;
+if (!creditWin || ollamaCredit.usage.secondary !== null) {
+  throw new Error("Ollama credit mode should set only the primary tier");
+}
+if (Math.abs(creditWin.usedPercent - (12.34 / 60) * 100) > 0.0001) {
+  throw new Error(`Expected Ollama monthly usage ${((12.34 / 60) * 100).toFixed(2)}%, got ${creditWin.usedPercent}%`);
+}
+if (!creditWin.resetDescription.includes("$12.34 / $60.00")) {
+  throw new Error(`Expected dollar amounts in reset description, got "${creditWin.resetDescription}"`);
+}
+if (!creditWin.resetDescription.includes("Resets in 3 weeks")) {
+  throw new Error(`Expected relative reset text in reset description, got "${creditWin.resetDescription}"`);
+}
+if (ollamaCredit.labels[0] !== "Monthly usage (+$5.00 credits)") {
+  throw new Error(`Expected balance label, got "${ollamaCredit.labels[0]}"`);
+}
+if (ollamaCredit.usage.loginMethod !== "Ollama Cloud Pro") {
+  throw new Error(`Expected Ollama Cloud Pro login method, got ${ollamaCredit.usage.loginMethod}`);
+}
+console.log("✓ Ollama Cloud HTML parser extracts monthly credit pool as tier");
+
+// Ollama Cloud billing-page reset date test (date generated ~20 days out)
+const billingReset = new Date(Date.now() + 20 * 24 * 3600 * 1000);
+const billingDateStr = billingReset.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+const billingShort = billingReset.toLocaleDateString([], { month: "short", day: "numeric" });
+const ollamaBillingHtml = `
+  <main>
+    <h2>Plan & Billing</h2>
+    <div>Pro Your subscription renews on ${billingDateStr}.</div>
+  </main>`;
+const ollamaCreditBilled = ollamaFetcher._parseSettingsHtml(ollamaCreditHtml, ollamaBillingHtml);
+const billedWin = ollamaCreditBilled.usage.primary;
+if (!billedWin || billedWin.resetAfterSeconds <= 0) {
+  throw new Error("Ollama billing reset date should yield positive resetAfterSeconds");
+}
+if (!billedWin.resetDescription.includes(`Resets ${billingShort}`)) {
+  throw new Error(`Expected exact reset date in reset description, got "${billedWin.resetDescription}"`);
+}
+if (ollamaCreditBilled.usage.loginMethod !== "Ollama Cloud Pro") {
+  throw new Error(`Expected Ollama Cloud Pro from billing plan, got ${ollamaCreditBilled.usage.loginMethod}`);
+}
+const billedPace = calculateUsagePace({
+  usedPercent: billedWin.usedPercent,
+  windowSeconds: billedWin.windowSeconds,
+  resetAfterSeconds: billedWin.resetAfterSeconds,
+});
+if (!billedPace) {
+  throw new Error("Expected pace calculation for the monthly window");
+}
+console.log("✓ Ollama Cloud billing page yields exact reset date and pace");
