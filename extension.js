@@ -614,9 +614,7 @@ export default class CodexBarExtension extends Extension {
       btn.set_child(btnBin);
 
       if (showLogos) {
-        const logoIcon = this._getProviderLogo(
-          provider.id || provider.name.toLowerCase(),
-        );
+        const logoIcon = this._getProviderLogo(provider.id, provider.name);
         if (logoIcon) {
           btnBin.add_child(logoIcon);
         }
@@ -1051,29 +1049,74 @@ export default class CodexBarExtension extends Extension {
    * @param {string} providerId
    * @returns {St.Icon|null}
    */
-  _getProviderLogo(providerId) {
-    if (!providerId) return null;
+  _getProviderLogo(providerId, providerName = "") {
+    if (!providerId && !providerName) return null;
 
-    // Normalize ID: lowercase and replace spaces with dashes
-    const id = providerId.toLowerCase().replace(/\s+/g, "-");
-    const logoPath = GLib.build_filenamev([
-      this.path,
-      "media",
-      "logos",
-      `${id}-symbolic.svg`,
-    ]);
+    // Normalize ID and name: lowercase and replace spaces with dashes
+    // Normalizar ID y nombre: minúsculas y reemplazar espacios con guiones
+    const candidates = [
+      (providerId || "").toLowerCase().replace(/\s+/g, "-"),
+      (providerName || "").toLowerCase().replace(/\s+/g, "-"),
+    ].filter((c) => c.length > 0);
 
-    if (GLib.file_test(logoPath, GLib.FileTest.EXISTS)) {
-      const gicon = Gio.Icon.new_for_string(logoPath);
+    // Known provider keys for fallback matching of custom or renamed providers
+    // (e.g. a custom "Codex CLI" provider still shows the Codex logo).
+    // Claves de proveedores conocidos para la coincidencia alternativa de
+    // proveedores personalizados o renombrados.
+    const knownKeys = [
+      "codex",
+      "claude",
+      "gemini",
+      "deepseek",
+      "copilot",
+      "openrouter",
+      "perplexity",
+      "mistral",
+      "antigravity",
+      "ollama",
+    ];
 
-      let icon = new St.Icon({
-        gicon: gicon,
-        icon_size: 16,
-        style_class: "codexbar-tab-icon",
-      });
+    const tried = new Set();
+    const logoFor = (key) => {
+      if (!key || tried.has(key)) return null;
+      tried.add(key);
+      const logoPath = GLib.build_filenamev([
+        this.path,
+        "media",
+        "logos",
+        `${key}-symbolic.svg`,
+      ]);
 
-      return icon;
+      if (GLib.file_test(logoPath, GLib.FileTest.EXISTS)) {
+        const gicon = Gio.Icon.new_for_string(logoPath);
+
+        return new St.Icon({
+          gicon: gicon,
+          icon_size: 16,
+          style_class: "codexbar-tab-icon",
+        });
+      }
+      return null;
+    };
+
+    // Step 1: exact match on ID or name
+    // Paso 1: coincidencia exacta en ID o nombre
+    for (const candidate of candidates) {
+      const icon = logoFor(candidate);
+      if (icon) return icon;
     }
+
+    // Step 2: keyword fallback, e.g. "codex-cli" or "Codex CLI" match "codex"
+    // Paso 2: coincidencia por palabra clave, ej. "codex-cli" o "Codex CLI" coincide con "codex"
+    for (const candidate of candidates) {
+      for (const key of knownKeys) {
+        if (candidate.includes(key)) {
+          const icon = logoFor(key);
+          if (icon) return icon;
+        }
+      }
+    }
+
     return null;
   }
 
