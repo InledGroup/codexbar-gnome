@@ -647,7 +647,10 @@ export default class CodexBarExtension extends Extension {
       normalizeDetailSections(activeData?.data?.usage?.details),
     );
     const isDegenerateTier = (tierData) =>
-      !!tierData && !tierData.windowSeconds && tierData.usedPercent === 0;
+      !!tierData &&
+      !tierData.windowSeconds &&
+      tierData.usedPercent === 0 &&
+      !tierData.resetDescription;
 
     if (activeData && activeData.data && activeData.data.usage) {
       const usage = activeData.data.usage;
@@ -870,6 +873,8 @@ export default class CodexBarExtension extends Extension {
           tierData = { ...tierData, usedPercent: creditsPercent };
           title = _("Credits");
         }
+      } else if (tierData && !tierData.windowSeconds && tierData.resetDescription) {
+        title = discoveredLabels[tierIdx] || _("Balance");
       }
 
       return { data: tierData, showPace: true, title };

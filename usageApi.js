@@ -187,16 +187,28 @@ export const formatPanelText = (usage, displayMode, elapsedSeconds = 0) => {
         parts.push(label ? `${label} ${percent}%` : `${percent}%`);
         if (resetSeconds === null) resetSeconds = (win.resetAfterSeconds || 0) - elapsedSeconds;
     }
-    if (parts.length === 0) return '';
-
-    let text = parts.join(' · ');
-    if (resetSeconds > 0) {
-        const minutes = Math.ceil(resetSeconds / 60);
-        const h = Math.floor(minutes / 60);
-        const m = minutes % 60;
-        text += h > 0 ? ` in ${h}h ${m}m` : ` in ${m}m`;
+    if (parts.length > 0) {
+        let text = parts.join(' · ');
+        if (resetSeconds > 0) {
+            const minutes = Math.ceil(resetSeconds / 60);
+            const h = Math.floor(minutes / 60);
+            const m = minutes % 60;
+            text += h > 0 ? ` in ${h}h ${m}m` : ` in ${m}m`;
+        }
+        return text;
     }
-    return text;
+
+    // Balance-only tiers (e.g. DeepSeek) or providerCost
+    if (usage.primary?.resetDescription) {
+        const match = usage.primary.resetDescription.match(/^\$[0-9.]+/);
+        if (match) return match[0];
+    }
+    if (usage.providerCost && typeof usage.providerCost.used === 'number') {
+        const currency = usage.providerCost.currencyCode === 'USD' ? '$' : '';
+        return `${currency}${usage.providerCost.used.toFixed(2)}`;
+    }
+
+    return '';
 };
 
 /**
@@ -484,8 +496,9 @@ export class UsageApiClient {
             payload.tertiary ||
             canonicalRateLimit
         ) {
-            const labelForWindow = (win) => {
-                if (!win || !win.windowSeconds) return 'Usage Window';
+            const labelForWindow = (win, key) => {
+                if (key && payload?.rateWindowLabels?.[key]) return payload.rateWindowLabels[key];
+                if (!win || !win.windowSeconds) return win?.resetDescription ? 'Balance' : 'Usage Window';
                 const hours = Math.round(win.windowSeconds / 3600);
                 if (hours >= 24) {
                     const days = Math.round(hours / 24);
@@ -504,7 +517,7 @@ export class UsageApiClient {
                     canonicalRateLimit?.[snakeCaseKey] ||
                     canonicalRateLimit?.[camelCaseKey]
                 );
-                if (win) queue.push({ win, label: labelForWindow(win) });
+                if (win) queue.push({ win, label: labelForWindow(win, key) });
             });
             if (Array.isArray(extraWindows)) {
                 extraWindows.forEach((item) => {
