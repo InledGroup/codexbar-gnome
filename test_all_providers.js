@@ -236,6 +236,24 @@ const testCases = [
     },
     expectedUsedPercent: 0.42786,
   },
+  {
+    name: "DeepSeek (Credit balance tier)",
+    data: {
+      provider: "deepseek",
+      source: "api",
+      rateWindowLabels: { primary: "Balance" },
+      usage: {
+        identity: { providerID: "deepseek" },
+        primary: {
+          usedPercent: 0,
+          resetDescription: "$7.53 (Paid: $7.53 / Granted: $0.00)",
+        },
+        secondary: null,
+        tertiary: null,
+      },
+    },
+    expectedUsedPercent: 0,
+  },
 ];
 
 console.log("--- Testing normalizeSummary for multiple formats ---\n");
@@ -316,6 +334,7 @@ const panelChecks = [
   [formatPanelText(panelUsage, "used", 4 * 3600), "5h 3% · W 22%"],
   [formatPanelText({}, "used"), ""],
   [formatPanelText({ primary: { usedPercent: 0, windowSeconds: 0 } }, "used"), ""],
+  [formatPanelText({ primary: { usedPercent: 0, windowSeconds: 0, resetDescription: "$7.53 (Paid: $7.53 / Granted: $0.00)" } }, "used"), "$7.53"],
 ];
 panelChecks.forEach(([actual, expected]) => {
   if (actual !== expected) {
@@ -828,3 +847,35 @@ if (!billedPace) {
   throw new Error("Expected pace calculation for the monthly window");
 }
 console.log("✓ Ollama Cloud billing page yields exact reset date and pace");
+
+// DeepSeek credit balance preservation and label test
+const deepSeekPayload = {
+  provider: "deepseek",
+  source: "api",
+  rateWindowLabels: { primary: "Balance" },
+  usage: {
+    identity: { providerID: "deepseek" },
+    primary: {
+      usedPercent: 0,
+      resetDescription: "$7.53 (Paid: $7.53 / Granted: $0.00)",
+    },
+    secondary: null,
+    tertiary: null,
+  },
+};
+// When passed to normalizeSummary with rateWindowLabels
+const normalizedDeepSeek = client.normalizeSummary({
+  ...deepSeekPayload.usage,
+  rateWindowLabels: deepSeekPayload.rateWindowLabels,
+}, false);
+if (!normalizedDeepSeek.usage.primary) {
+  throw new Error("Expected DeepSeek primary window to be preserved");
+}
+if (normalizedDeepSeek.usage.primary.resetDescription !== "$7.53 (Paid: $7.53 / Granted: $0.00)") {
+  throw new Error(`Expected resetDescription to be preserved, got ${normalizedDeepSeek.usage.primary.resetDescription}`);
+}
+if (!normalizedDeepSeek.labels || normalizedDeepSeek.labels[0] !== "Balance") {
+  throw new Error(`Expected labels[0] to be 'Balance', got ${JSON.stringify(normalizedDeepSeek.labels)}`);
+}
+console.log("✓ DeepSeek credit balance tier and rateWindowLabels normalize correctly");
+
