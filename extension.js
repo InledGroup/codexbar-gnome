@@ -81,11 +81,13 @@ export default class CodexBarExtension extends Extension {
     // Per-provider text ("5h 3% · W 22% in 3h 15m"), shown instead of the
     // bar when any provider is flagged showInPanel.
     this._panelTextBox = new St.BoxLayout({
-      vertical: false,
+      orientation: Clutter.Orientation.HORIZONTAL,
       y_align: Clutter.ActorAlign.CENTER,
       visible: false,
     });
-    this._panelBox = new St.BoxLayout({ vertical: false });
+    this._panelBox = new St.BoxLayout({
+      orientation: Clutter.Orientation.HORIZONTAL,
+    });
     this._panelBox.add_child(this._iconBox);
     this._panelBox.add_child(this._panelTextBox);
     this._indicator.add_child(this._panelBox);
@@ -222,6 +224,14 @@ export default class CodexBarExtension extends Extension {
     if (this._iconFill) {
       this._iconFill.destroy();
       this._iconFill = null;
+    }
+    if (this._panelTextBox) {
+      this._panelTextBox.destroy();
+      this._panelTextBox = null;
+    }
+    if (this._panelBox) {
+      this._panelBox.destroy();
+      this._panelBox = null;
     }
     if (this._iconBox) {
       this._iconBox.destroy();
@@ -551,7 +561,7 @@ export default class CodexBarExtension extends Extension {
     const displayMode = this._settings.get_string("display-mode");
     shown.forEach(({ provider, entry }) => {
       const segment = new St.BoxLayout({
-        vertical: false,
+        orientation: Clutter.Orientation.HORIZONTAL,
         style_class: "codexbar-panel-segment",
       });
       const logo = this._getProviderLogo(
