@@ -1,3 +1,4 @@
+
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
@@ -13,7 +14,7 @@ const ME_ENDPOINT = '/backend-api/me';
 
 /**
  * Custom error class for API related issues.
- * Clase de error personalizada para problemas relacionados con la API.
+ * Custom error class for API-related failures.
  */
 export class UsageApiError extends Error {
     constructor(message, {statusCode = 0, payload = null} = {}) {
@@ -30,7 +31,7 @@ export class UsageApiError extends Error {
 
 /**
  * Client for fetching and parsing usage data from OpenAI/ChatGPT.
- * Cliente para obtener y parsear datos de uso de OpenAI/ChatGPT.
+ * Client to fetch and parse OpenAI/ChatGPT usage data.
  */
 const normalizePercentValue = (rawPercent, mode = 'used') => {
     let percent = parseFloat(rawPercent);
@@ -169,7 +170,6 @@ const shortWindowLabel = (windowSeconds) => {
 
 /**
  * Compact panel text in the style of the macOS menu bar, e.g.
- * "5h 3% · W 22% in 3h 15m". The countdown is the primary window's reset,
  * less the seconds elapsed since the data was fetched.
  */
 export const formatPanelText = (usage, displayMode, elapsedSeconds = 0) => {
@@ -348,14 +348,11 @@ export class UsageApiClient {
 
     /**
      * Fetch usage summary from a direct API provider.
-     * Obtiene el resumen de uso desde un proveedor de API directa.
      *
      * @param {string} cookies - Session cookies for authentication.
-     *                            Cookies de sesión para autenticación.
      * @param {string} providerId - Provider identifier ('codex' or 'ollama').
-     *                              Identificador del proveedor ('codex' o 'ollama').
+     *                              Provider identifier ('codex' or 'ollama').
      * @param {Gio.Cancellable|null} cancellable - Cancellable for the request.
-     *                                               Cancelable para la petición.
      */
     async fetchSummary(cookies, providerId = 'codex', cancellable = null) {
         if (providerId === 'ollama') {
@@ -367,11 +364,8 @@ export class UsageApiClient {
         return this.normalizeSummary(usagePayload);
     }
 
-
-
     /**
      * Fetch usage summary via external codexbar CLI tool.
-     * Obtiene el resumen de uso mediante la herramienta externa de terminal codexbar.
      */
     async fetchCliSummary(command, cancellable = null) {
         return this._cliFetcher.fetch(command, cancellable);
@@ -379,7 +373,6 @@ export class UsageApiClient {
 
     /**
      * Abort any pending requests and clean up session.
-     * Aborta cualquier petición pendiente y limpia la sesión.
      */
     destroy() {
         if (this._session) {
@@ -388,14 +381,13 @@ export class UsageApiClient {
         }
     }
 
-
     /**
      * Normalize the API payload into a unified structure.
-     * Normaliza el payload de la API en una estructura unificada.
+     * Normalizes the API payload into a unified structure.
      */
     normalizeSummary(payload, isAntigravity = false) {
         // Detect if the provider is antigravity
-        // Detectar si el proveedor es antigravity
+        // Detect whether the provider is antigravity
         const isAnti = isAntigravity ||
             payload?.identity?.providerID === "antigravity" ||
             payload?.provider === "antigravity" ||
@@ -442,7 +434,6 @@ export class UsageApiClient {
         const extraWindows = payload?.extraRateWindows || payload?.usage?.extraRateWindows;
         if (isAnti && extraWindows && Array.isArray(extraWindows)) {
             // Handle multiple quota windows specific to Antigravity
-            // Manejar múltiples ventanas de cuota específicas de Antigravity
             const labels = [];
             const mappedTiers = {
                 primary: null,
@@ -475,8 +466,8 @@ export class UsageApiClient {
 
         // If it already has structured tiers, normalize them in place to keep order,
         // then fill any remaining tier slots with extraRateWindows (e.g. Codex Spark)
-        // Si ya tiene niveles estructurados, normalizarlos manteniendo el orden,
-        // y rellenar los niveles restantes con extraRateWindows (ej. Codex Spark)
+        // If structured tiers already exist, normalize them in order and
+        // and fill the remaining tiers from extraRateWindows (e.g. Codex Spark)
         const canonicalRateLimit = payload?.rate_limit || payload?.rateLimit;
         if (
             payload.primary ||
@@ -590,7 +581,6 @@ export class UsageApiClient {
 
     /**
      * Recursively extract usage windows from any JSON structure.
-     * Extrae recursivamente las ventanas de uso de cualquier estructura JSON.
      */
     extractWindows(payload) {
         const windows = [];
@@ -626,7 +616,7 @@ export class UsageApiClient {
             addWindow(windows, makeWindow(obj));
 
             // Recurse into all keys
-            // Recorrer todas las claves
+            // Iterate over all keys
             for (const key in obj) {
                 collect(obj[key]);
             }

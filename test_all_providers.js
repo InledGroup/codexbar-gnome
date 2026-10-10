@@ -14,7 +14,6 @@ import {
 
 const client = new UsageApiClient();
 
-// Es aquí donde debes añadir para testear
 const codexSparkUsage = {
   accountEmail: "user@example.com",
   updatedAt: "2026-07-10T13:08:58Z",

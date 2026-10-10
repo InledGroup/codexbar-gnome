@@ -1,3 +1,4 @@
+
 import Soup from 'gi://Soup';
 import GLib from 'gi://GLib';
 import { UsageFetcher } from '../core/ports/UsageFetcher.js';
@@ -13,14 +14,10 @@ const OLLAMA_BILLING_URL = 'https://ollama.com/settings/billing';
  * Parses the HTML to extract session and weekly quota bars.
  *
  * ADAPTADOR (Arquitectura Hexagonal)
- * Implementación del puerto UsageFetcher para obtener métricas de uso de Ollama Cloud
- * directamente desde la página ollama.com/settings usando cookies del navegador.
- * Parsea el HTML para extraer las barras de cuota de sesión y semanal.
  */
 export class OllamaSettingsFetcher extends UsageFetcher {
     /**
      * @param {Soup.Session|null} session - Existing network session or null to create a new one.
-     *                                      Sesión de red existente o null para crear una nueva.
      */
     constructor(session) {
         super();
@@ -34,20 +31,17 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Fetch the usage data from ollama.com/settings.
-     * Obtiene los datos de uso desde ollama.com/settings.
      *
      * @param {string} cookies - Session cookies for ollama.com authentication.
-     *                            Cookies de sesión para la autenticación en ollama.com.
      * @param {object|null} extraParams - Extra options containing the cancellable token.
      *                                    Opciones adicionales que contienen el token cancelable.
      * @returns {Promise<object>} The parsed usage payload with session and weekly windows.
-     *                            El payload de uso parseado con ventanas de sesión y semanal.
      */
     async fetch(cookies, extraParams = null) {
         const cancellable = extraParams?.cancellable || null;
 
         if (!cookies)
-            throw new UsageApiError('Authentication cookies are required / Las cookies de autenticación son requeridas.');
+            throw new UsageApiError('Authentication cookies are required.');
 
         const html = await this._getSettingsHtml(cookies, cancellable);
 
@@ -65,7 +59,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Fetch the settings page HTML.
-     * Obtiene el HTML de la página de configuración.
      */
     async _getSettingsHtml(cookies, cancellable) {
         return this._fetchHtml(OLLAMA_SETTINGS_URL, cookies, cancellable);
@@ -74,8 +67,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
     /**
      * Fetch the billing page HTML for the exact renewal date.
      * Falls back to the relative reset text when unavailable.
-     * Obtiene el HTML de la página de facturación para la fecha exacta de renovación.
-     * Usa el texto relativo de reinicio como respaldo cuando no está disponible.
      */
     async _getBillingHtml(cookies, cancellable) {
         return this._fetchHtml(OLLAMA_BILLING_URL, cookies, cancellable);
@@ -83,7 +74,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Shared authenticated HTML fetch.
-     * Obtención compartida de HTML autenticado.
      */
     async _fetchHtml(url, cookies, cancellable) {
         const message = Soup.Message.new('GET', url);
@@ -99,7 +89,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Execute a text (non-JSON) HTTP request.
-     * Ejecuta una petición HTTP de texto (no JSON).
      */
     async _executeTextRequest(message, cancellable) {
         let bytes;
@@ -120,7 +109,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Promise wrapper for Soup async send.
-     * Envoltura Promise para el envío asíncrono de Soup.
      */
     _sendAndRead(message, cancellable) {
         return new Promise((resolve, reject) => {
@@ -141,11 +129,9 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Parse the settings HTML into a usage payload.
-     * Parsea el HTML de configuración en un payload de uso.
      */
     /**
      * Detect the monthly credit-pool block (transparent per-token pricing).
-     * Detecta el bloque de pool de créditos mensuales (precios transparentes por token).
      */
     _hasCreditBlock(text) {
         return /monthly usage\s*\$[\d,]+/i.test(text) ||
@@ -202,10 +188,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
      * No 5-hour or weekly limits exist on these plans; the pool refreshes monthly.
      * Returns a single tier so the extension renders a bar with reset and pace rows,
      * just like other windowed providers.
-     * Parsea el bloque de pool de créditos mensuales (precios transparentes por token).
-     * Estos planes no tienen límites de 5 horas ni semanales; el pool se renueva mensualmente.
-     * Devuelve un único nivel para que la extensión muestre una barra con filas de
-     * reinicio y ritmo, igual que otros proveedores con ventanas.
      */
     _parseCreditPool(html, text, billingHtml, accountEmail, loginMethod) {
         const poolMatch = text.match(/monthly usage\s*\$([\d,]+(?:\.\d{1,2})?)\s*of\s*\$([\d,]+(?:\.\d{1,2})?)\s*used/i);
@@ -269,8 +251,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
     /**
      * Extract plan and renewal date from the billing page text.
      * Looks for "Your subscription renews on <date>".
-     * Extrae el plan y la fecha de renovación del texto de facturación.
-     * Busca "Your subscription renews on <fecha>".
      */
     _extractBillingInfo(billingText) {
         const planMatch = billingText.match(/(Pro|Max|Team|Free)\s+your subscription renews on/i);
@@ -290,8 +270,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
     /**
      * Parse a renewal date like "October 21, 2026" or "October 21".
      * Without a year, assume the next upcoming occurrence.
-     * Parsea una fecha de renovación como "October 21, 2026" u "October 21".
-     * Sin año, asume la próxima ocurrencia futura.
      */
     _parseRenewalDate(value) {
         const cleaned = value.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
@@ -312,8 +290,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
     /**
      * Seconds in the billing cycle ending at the given reset date
      * (same calendar day one month earlier; robust across month lengths).
-     * Segundos en el ciclo de facturación que termina en la fecha dada
-     * (mismo día del mes anterior; robusto ante meses de distinta duración).
      */
     _monthSeconds(resetDate) {
         const start = new Date(resetDate.getTime());
@@ -323,7 +299,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Parse a dollar amount like "1,234.56" into a float.
-     * Convierte un importe en dólares como "1,234.56" en un float.
      */
     _parseAmount(value) {
         const parsed = parseFloat(String(value).replace(/,/g, ''));
@@ -332,7 +307,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Extract a single usage window (session or weekly) from the HTML.
-     * Extrae una ventana de uso individual (sesión o semanal) del HTML.
      */
     _extractWindow(html, text, label, fallbackWindowSeconds) {
         const labelRegex = new RegExp(`\\b${label}\\b`, 'gi');
@@ -391,7 +365,7 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Strip HTML tags and decode entities to plain text.
-     * Elimina las etiquetas HTML y decodifica entidades a texto plano.
+     * Strips HTML tags and decodes entities into plain text.
      */
     _htmlToText(html) {
         return this._decodeHtmlEntities(html
@@ -420,7 +394,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Extract a chunk of text around a regex match.
-     * Extrae un fragmento de texto alrededor de una coincidencia regex.
      */
     _chunkAround(value, regex, radius) {
         regex.lastIndex = 0;
@@ -434,7 +407,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Extract the first valid percentage from a text chunk.
-     * Extrae el primer porcentaje válido de un fragmento de texto.
      */
     _extractPercent(chunk) {
         const patterns = [
@@ -459,7 +431,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Extract the window duration in seconds from text.
-     * Extrae la duración de la ventana en segundos del texto.
      */
     _extractWindowSeconds(chunk, fallbackWindowSeconds) {
         const hourMatch = chunk.match(/(\d+)\s*(?:-|\s)?\s*hour\s+(?:limit|window|session)/i) ||
@@ -473,7 +444,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Extract reset-after seconds from data-time attributes or relative text.
-     * Extrae los segundos de reinicio desde atributos data-time o texto relativo.
      */
     _extractResetAfterSeconds(htmlChunk, textChunk) {
         const dataTimeRegex = /data-time=["']([^"']+)["']/gi;
@@ -488,7 +458,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Convert a timestamp or date string to seconds until now.
-     * Convierte un timestamp o cadena de fecha a segundos hasta ahora.
      */
     _secondsUntil(value) {
         let timestamp = NaN;
@@ -505,7 +474,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Parse relative reset text like "resets in 2 hours".
-     * Parsea texto de reinicio relativo como "resets in 2 hours".
      */
     _parseRelativeResetSeconds(chunk) {
         const resetMatch = chunk.match(/(?:reset|refresh)[^\.]*?\bin\s+([^\.]+)/i);
@@ -526,7 +494,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Extract a reset description text from a chunk.
-     * Extrae una descripción de reinicio de un fragmento.
      */
     _extractResetText(chunk) {
         const match = chunk.match(/((?:reset|refresh)[^\.]{0,120})/i);
@@ -535,7 +502,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Extract the plan name from text.
-     * Extrae el nombre del plan del texto.
      */
     _extractPlan(text) {
         const planMatch = text.match(/(?:current\s+)?plan\s*:?\s*(Free|Basic|Pro|Premium|Team|Business|Enterprise)/i) ||
@@ -545,7 +511,6 @@ export class OllamaSettingsFetcher extends UsageFetcher {
 
     /**
      * Extract an email address from text.
-     * Extrae una dirección de correo electrónico del texto.
      */
     _extractEmail(text) {
         const emailMatch = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);

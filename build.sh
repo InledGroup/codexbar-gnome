@@ -12,8 +12,8 @@ gnome-extensions pack \
     --extra-source=prefs.js \
     --extra-source=usageApi.js \
     --extra-source=providerSources.js \
-    --extra-source=secret.js \
     --extra-source=stylesheet.css \
+    --extra-source=secret.js \
     --extra-source=core/ \
     --extra-source=adapters/ \
     --extra-source=media/ \

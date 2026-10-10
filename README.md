@@ -135,7 +135,7 @@ Follow us on social media for updates, discussions, and support:
 
 ## License
 
-This project is licensed under the terms of the MIT license. Contributions are welcome! 
+This project is licensed under the terms of the GNU General Public License v2.0 or later. Contributions are welcome! 
 
 > [!WARNING]
 > If you base your code on ours or remix it using AI, you must credit the original repository out of respect for the contributors and the creator.

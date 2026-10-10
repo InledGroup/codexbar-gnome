@@ -1,3 +1,4 @@
+
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import { UsageFetcher } from '../core/ports/UsageFetcher.js';
@@ -24,7 +25,6 @@ export class CliSubprocessFetcher extends UsageFetcher {
             throw new UsageApiError("No command configured / No hay ningún comando configurado.");
         }
 
-        // Step 1: Resolve the absolute path of the 'codexbar' executable.
         let executable = "/home/linuxbrew/.linuxbrew/bin/codexbar";
         const commonPaths = [
             "/home/linuxbrew/.linuxbrew/bin/codexbar",
@@ -94,7 +94,6 @@ export class CliSubprocessFetcher extends UsageFetcher {
         });
         launcher.set_environ(env);
 
-        // Step 2: Parse command line arguments directly to avoid unsafe shell execution
         const [ok, argv] = GLib.shell_parse_argv(finalCommand);
         if (!ok || !argv || argv.length === 0) {
             throw new UsageApiError("Invalid command line configuration / Configuración de línea de comandos no válida.");
@@ -120,7 +119,6 @@ export class CliSubprocessFetcher extends UsageFetcher {
         const trimmedStdout = stdout.trim();
         const trimmedStderr = stderr.trim();
 
-        // Step 3: Automatic label detection (run command in text mode to parse names)
         let labels = [];
         try {
             const discoveryArgv = argv.filter((arg, index) => {
@@ -161,7 +159,6 @@ export class CliSubprocessFetcher extends UsageFetcher {
             // Ignore label discovery failures
         }
 
-        // Step 4: Parse the JSON stdout or format errors
         if (trimmedStdout && (trimmedStdout.startsWith("[") || trimmedStdout.startsWith("{"))) {
             try {
                 const parsed = JSON.parse(trimmedStdout);

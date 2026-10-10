@@ -1,3 +1,4 @@
+
 import Gio from "gi://Gio";
 import GioUnix from "gi://GioUnix";
 import GLib from "gi://GLib";
@@ -115,7 +116,6 @@ const PREDEFINED_PROVIDERS = [
 
 /**
  * Preferences page for CodexBar.
- * Página de preferencias para CodexBar.
  */
 const CodexBarPrefsPage = GObject.registerClass(
   class CodexBarPrefsPage extends Adw.PreferencesPage {
@@ -224,7 +224,6 @@ const CodexBarPrefsPage = GObject.registerClass(
       
       jsonRow.add_suffix(jsonBox);
       group.add(jsonRow);
-
 
       return group;
     }
@@ -494,7 +493,7 @@ const CodexBarPrefsPage = GObject.registerClass(
 
     /**
      * Build the AI providers configuration group.
-     * Construye el grupo de configuración de proveedores de IA.
+     * Builds the AI providers settings group.
      */
     _buildProvidersGroup() {
       const group = new Adw.PreferencesGroup({
@@ -554,7 +553,6 @@ const CodexBarPrefsPage = GObject.registerClass(
         const isPredefined = PREDEFINED_PROVIDERS.some((p) => p.id === info.id);
 
         // Handle command defaults and migrations
-        // Manejar valores por defecto y migraciones de comandos
         let command = info.defaultCommand || "";
         if (activeData) {
           if (
@@ -688,7 +686,7 @@ const CodexBarPrefsPage = GObject.registerClass(
         // each fire a pointless keyring lookup for a token they can't use.
         if (info.supportsDirectApi) {
           // For Direct API providers like Codex
-          // Para proveedores de API directa como Codex
+          // For direct API providers like Codex
           const tokenEntry = new Gtk.PasswordEntry({
             placeholder_text: _(
               "Authentication Cookie (starts with __Secure...)",
@@ -943,7 +941,6 @@ const CodexBarPrefsPage = GObject.registerClass(
                 newProvider,
               );
               // Add before the "Add Custom Provider" button
-              // Añadir antes del botón "Añadir Proveedor Personalizado"
               group.add(row);
               // Manually move it up if needed, but Adw.PreferencesGroup appends
               // In GNOME 45+ we can't easily reorder children in PreferencesGroup
@@ -1027,7 +1024,6 @@ const CodexBarPrefsPage = GObject.registerClass(
       };
 
       // Find the executable binary or fallback to python module
-      // Encontrar el binario ejecutable o recurrir al módulo python
       let argv = null;
       if (GLib.find_program_in_path("codexbar-cookie-importer")) {
         argv = ["codexbar-cookie-importer"];
@@ -1041,7 +1037,7 @@ const CodexBarPrefsPage = GObject.registerClass(
         if (GLib.file_test(localBin, GLib.FileTest.EXISTS)) {
           argv = [localBin];
         } else {
-          // Try executing as module / Intentar ejecutar como módulo
+          // Fall back to the python module entry point
           argv = ["/usr/bin/python3", "-m", "codexbar_cookie_importer"];
         }
       }
@@ -1085,7 +1081,7 @@ const CodexBarPrefsPage = GObject.registerClass(
             if (timedOut) return;
 
             // If the module is not found, python returns exit code 1 or 2 and No module named in stderr
-            // Si el módulo no se encuentra, python devuelve código de salida 1 o 2 y No module named en stderr
+            // Python exits 1/2 with "No module named" on stderr when the module is missing
             if (
               !success &&
               stderr &&
@@ -1144,7 +1140,6 @@ const CodexBarPrefsPage = GObject.registerClass(
 
 /**
  * Main preferences entry point.
- * Punto de entrada principal para las preferencias.
  */
 export default class CodexBarPreferences extends ExtensionPreferences {
   fillPreferencesWindow(window) {
@@ -1153,7 +1148,7 @@ export default class CodexBarPreferences extends ExtensionPreferences {
     window.add(page);
 
     // Null out token schema when preferences window is closed
-    // Anular el esquema del token cuando se cierre la ventana de preferencias
+    // Null out the token schema when the preferences window closes
     window.connect("destroy", () => {
       nullTokenSchema();
     });

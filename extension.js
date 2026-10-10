@@ -1,4 +1,5 @@
-// This file contains the main skeleton of the extension. Is like the HTML ;)
+
+// Main extension skeleton: panel indicator, popup menu and refresh loop.
 
 import Gio from "gi://Gio";
 import GLib from "gi://GLib";
@@ -20,8 +21,10 @@ import {
 } from "./usageApi.js";
 import { loadToken, nullTokenSchema } from "./secret.js";
 
+// Debug trace is opt-in: set CODEXBAR_DEBUG=1 before starting the shell
+// (e.g. `CODEXBAR_DEBUG=1 gnome-shell --devkit`) to enable it.
 function logDev(msg) {
-  console.log(`[CodexBar] ${msg}`);
+  if (GLib.getenv("CODEXBAR_DEBUG")) console.log(`[CodexBar] ${msg}`);
 }
 
 // Secondary text keeps the theme's foreground colour and is dimmed with actor
@@ -46,7 +49,6 @@ function subtitleLabel(params) {
 
 /**
  * Main extension class for CodexBar.
- * Clase principal de la extensión para CodexBar.
  */
 export default class CodexBarExtension extends Extension {
   /**
@@ -54,17 +56,12 @@ export default class CodexBarExtension extends Extension {
    * Se llama cuando la extensión se activa.
    */
   enable() {
-    // Obtiene los ajustes
     this._settings = this.getSettings();
     this._apiClient = new UsageApiClient(this.path);
     this._copyTimeouts = [];
 
-    // Main indicator button in the panel
-    // El botón principal (el del uso)
     this._indicator = new PanelMenu.Button(0.0, _("CodexBar"), false);
 
-    // Icon container with progress fill
-    // Contenedor del icono con relleno de progreso
     this._iconBox = new St.BoxLayout({
       style_class: "codexbar-panel-icon-box",
       orientation: Clutter.Orientation.HORIZONTAL,
@@ -92,8 +89,6 @@ export default class CodexBarExtension extends Extension {
     this._panelBox.add_child(this._panelTextBox);
     this._indicator.add_child(this._panelBox);
 
-    // Header section of the popup menu
-    // Sección de cabecera del menú desplegable (el que aparece cuando clicas)
     this._headerBox = new St.BoxLayout({
       style_class: "codexbar-header",
       orientation: Clutter.Orientation.HORIZONTAL,
@@ -131,16 +126,12 @@ export default class CodexBarExtension extends Extension {
     this._indicator.menu.box.add_child(this._headerBox);
     this._indicator.menu.box.add_style_class_name("codexbar-popup");
 
-    // Tabs for switching between different providers
-    // Pestañas para cambiar entre diferentes proveedores
     this._tabsContainer = new St.BoxLayout({
       style_class: "codexbar-tabs-container",
       orientation: Clutter.Orientation.HORIZONTAL,
     });
     this._indicator.menu.box.add_child(this._tabsContainer);
 
-    // Main content area for usage stats
-    // Área de contenido principal para las estadísticas de uso
     this._contentBox = new St.BoxLayout({
       orientation: Clutter.Orientation.VERTICAL,
       style_class: "codexbar-usage-section",
@@ -154,8 +145,6 @@ export default class CodexBarExtension extends Extension {
     this._loading = false;
     this._cancellable = new Gio.Cancellable();
 
-    // Standard signal handling
-    // Manejo estándar de señales 
     this._settings.connectObject(
       "changed::providers", () => this._onSettingsChanged(),
       "changed::refresh-interval", () => this._onSettingsChanged(),
@@ -183,22 +172,16 @@ export default class CodexBarExtension extends Extension {
    * Se llama cuando la extensión se desactiva.
    */
   disable() {
-    // Step 1: Clean up the API client
-    // Paso 1: Limpiar el cliente de la API
     if (this._apiClient) {
       this._apiClient.destroy();
       this._apiClient = null;
     }
 
-    // Step 2: Cancel any pending subprocesses or async operations
-    // Paso 2: Cancelar cualquier subproceso o operación asíncrona pendiente
     if (this._cancellable) {
       this._cancellable.cancel();
       this._cancellable = null;
     }
 
-    // Step 3: Remove timeouts
-    // Paso 3: Eliminar los timeouts
     if (this._timeoutId) {
       GLib.source_remove(this._timeoutId);
       this._timeoutId = null;
@@ -212,8 +195,6 @@ export default class CodexBarExtension extends Extension {
       this._copyTimeouts = null;
     }
 
-    // Step 4: Disconnect all settings signals
-    // Paso 4: Desconectar todas las señales de configuración
     if (this._settings) {
       this._settings.disconnectObject(this);
       this._settings = null;
@@ -257,23 +238,24 @@ export default class CodexBarExtension extends Extension {
       this._indicator.destroy();
       this._indicator = null;
     }
-    this._panelTextBox = null;
-    this._panelBox = null;
+    if (this._panelTextBox) {
+      this._panelTextBox.destroy();
+      this._panelTextBox = null;
+    }
+    if (this._panelBox) {
+      this._panelBox.destroy();
+      this._panelBox = null;
+    }
 
-    // Step 6: Nullify remaining references to prevent memory leaks
-    // Paso 6: Anular referencias restantes para prevenir fugas de memoria
     this._providersData = [];
     this._activeProviderIndex = 0;
 
-    // Step 7: Release schema references to prevent memory leaks
-    // Paso 7: Liberar referencias de esquemas para prevenir fugas de memoria
     nullTokenSchema();
 
   }
 
   /**
    * Handle settings changes.
-   * Manejar cambios en la configuración.
    */
   _onSettingsChanged() {
     const providersJson = this._settings.get_string("providers");
@@ -294,7 +276,6 @@ export default class CodexBarExtension extends Extension {
 
   /**
    * Set up the auto-refresh timer.
-   * Configura el temporizador de refresco automático.
    */
   _setupTimeout() {
     if (this._timeoutId) {
@@ -317,7 +298,6 @@ export default class CodexBarExtension extends Extension {
 
   /**
    * Refresh usage data for all enabled providers.
-   * Refrescar los datos de uso para todos los proveedores habilitados.
    */
   async _refreshData() {
     if (this._loading || this._providers.length === 0) return;
@@ -328,7 +308,6 @@ export default class CodexBarExtension extends Extension {
 
     logDev("Refreshing usage data...");
 
-    // Intercept if developer custom output simulation is active
     if (this._settings.get_boolean("dev-custom-output-enabled")) {
       const mockName = this._settings.get_string("dev-custom-output-provider-name") || "Mock Provider";
       const mockJson = this._settings.get_string("dev-custom-output-json") || "[]";
@@ -415,8 +394,6 @@ export default class CodexBarExtension extends Extension {
           }
           data = await this._apiClient.fetchSummary(token, provider.id, this._cancellable);
 
-          // Generate dynamic labels based on window durations
-          // Generar etiquetas dinámicas basadas en las duraciones de las ventanas
           let apiLabels = [];
           if (data.labels && data.labels.length > 0) {
             apiLabels = data.labels;
@@ -459,8 +436,6 @@ export default class CodexBarExtension extends Extension {
         continue;
       }
 
-      // Case 2: Provider uses CLI command (external codexbar tool)
-      // Caso 2: El proveedor usa un comando CLI (herramienta codexbar externa)
       if (!provider.command) {
         logDev(`Error: No CLI command configured for provider: ${provider.name}`);
         this._providersData[i] = { error: _("No command configured") };
@@ -531,8 +506,8 @@ export default class CodexBarExtension extends Extension {
     }
 
     if (this._cancellable && !this._cancellable.is_cancelled()) {
-      // ponytail: one stamp for the whole sequential fetch; skews the panel
-      // countdown by the fetch duration (seconds), stamp per provider if that matters.
+      // One timestamp for the whole sequential fetch; the panel countdown is
+      // skewed by the fetch duration (seconds). Stamp per provider if needed.
       const fetchedAt = Date.now();
       this._providersData.forEach((d) => {
         if (d) d.fetchedAt = fetchedAt;
@@ -590,7 +565,7 @@ export default class CodexBarExtension extends Extension {
 
   /**
    * Normalize percentage value.
-   * Normaliza el valor del porcentaje.
+   * Normalize a percentage value.
    */
   _normalizePercent(value) {
     if (value === undefined || value === null) return 0;
@@ -622,7 +597,6 @@ export default class CodexBarExtension extends Extension {
 
   /**
    * Update the indicator menu UI.
-   * Actualiza la interfaz del menú del indicador.
    */
   _updateUI() {
     if (!this._indicator) return;
@@ -634,8 +608,6 @@ export default class CodexBarExtension extends Extension {
     const displayMode = this._settings.get_string("display-mode");
     const firstRun = this._settings.get_boolean("first-run");
 
-    // Check for CLI and Cookie Importer presence
-    // Comprobar la presencia de la CLI y del importador de cookies
     const codexbarExists = this._checkBinaryExists("codexbar");
     const importerExists = this._checkBinaryExists("codexbar-cookie-importer");
 
@@ -644,8 +616,6 @@ export default class CodexBarExtension extends Extension {
       return;
     }
 
-    // Recalculate active usage for the panel icon (average of all tiers)
-    // Recalcular el uso activo para el icono del panel (media de todos los niveles)
     let totalPercent = 0;
     let tierCount = 0;
 
@@ -683,8 +653,6 @@ export default class CodexBarExtension extends Extension {
 
     let activePercent = tierCount > 0 ? totalPercent / tierCount : 0;
 
-    // Create tab buttons
-    // Crear botones de pestaña
     const showLogos = this._settings.get_boolean("show-logos");
 
     this._providers.forEach((provider, index) => {
@@ -723,8 +691,6 @@ export default class CodexBarExtension extends Extension {
       this._tabsContainer.add_child(btn);
     });
 
-    // Apply fill to panel icon based on ACTIVE provider
-    // Aplicar relleno al icono del panel basado en el proveedor ACTIVO
     if (this._iconFill) {
       // Interior width of the box (15px - 2*1px border - 2*1px padding = 11px)
       const totalFillWidth = 11;
@@ -760,15 +726,12 @@ export default class CodexBarExtension extends Extension {
 
     const activeProvider = this._providers[this._activeProviderIndex];
     // Reuse activeData already declared above
-    // Reutilizar activeData ya declarada arriba
 
     if (!activeData) {
       this._contentBox.add_child(new St.Label({ text: _("Loading data...") }));
       return;
     }
 
-    // Show error if any
-    // Mostrar error si existe
     if (activeData.error) {
       let errorBox = new St.BoxLayout({
         orientation: Clutter.Orientation.VERTICAL,
@@ -818,8 +781,6 @@ export default class CodexBarExtension extends Extension {
     const usage = data.usage;
     const showPacing = this._settings.get_boolean("show-pacing-info");
 
-    // Account information
-    // Información de la cuenta
     if (usage.accountEmail) {
       let accountBox = new St.BoxLayout({
         orientation: Clutter.Orientation.VERTICAL,
@@ -868,7 +829,7 @@ export default class CodexBarExtension extends Extension {
     this._renderDetailSections(usage);
 
     // Usage bars for each tier
-    // Barras de uso para cada nivel
+    // Usage bar for each tier
     const tiers = ["primary", "secondary", "tertiary", "quaternary"];
     const discoveredLabels = activeData.labels || [];
     let hasTiers = false;
@@ -1153,7 +1114,6 @@ export default class CodexBarExtension extends Extension {
     if (!providerId && !providerName) return null;
 
     // Normalize ID and name: lowercase and replace spaces with dashes
-    // Normalizar ID y nombre: minúsculas y reemplazar espacios con guiones
     const candidates = [
       (providerId || "").toLowerCase().replace(/\s+/g, "-"),
       (providerName || "").toLowerCase().replace(/\s+/g, "-"),
@@ -1199,15 +1159,11 @@ export default class CodexBarExtension extends Extension {
       return null;
     };
 
-    // Step 1: exact match on ID or name
-    // Paso 1: coincidencia exacta en ID o nombre
     for (const candidate of candidates) {
       const icon = logoFor(candidate);
       if (icon) return icon;
     }
 
-    // Step 2: keyword fallback, e.g. "codex-cli" or "Codex CLI" match "codex"
-    // Paso 2: coincidencia por palabra clave, ej. "codex-cli" o "Codex CLI" coincide con "codex"
     for (const candidate of candidates) {
       for (const key of knownKeys) {
         if (candidate.includes(key)) {
@@ -1294,8 +1250,6 @@ export default class CodexBarExtension extends Extension {
       }),
     );
 
-    // --- Dependency 1: CodexBar CLI ---
-    // --- Dependencia 1: CodexBar CLI ---
     let dep1Box = new St.BoxLayout({
       orientation: Clutter.Orientation.VERTICAL,
       style:
@@ -1337,8 +1291,6 @@ export default class CodexBarExtension extends Extension {
     }
     box.add_child(dep1Box);
 
-    // --- Dependency 2: Cookie Importer for codex ---
-    // --- Dependencia 2: Importador de Cookies para codex---
     let dep2Box = new St.BoxLayout({
       orientation: Clutter.Orientation.VERTICAL,
       style:
@@ -1384,8 +1336,6 @@ export default class CodexBarExtension extends Extension {
     }
     box.add_child(dep2Box);
 
-    // --- Dependency 3: SSL Helper (for Antigravity) ---
-    // --- Dependencia 3: Asistente SSL (para Antigravity) ---
     let dep3Box = new St.BoxLayout({
       orientation: Clutter.Orientation.VERTICAL,
       style:
@@ -1434,31 +1384,11 @@ export default class CodexBarExtension extends Extension {
     }
     box.add_child(dep3Box);
 
-
-
-    // --- Buttons ---
-    // --- Botones ---
     let btnBox = new St.BoxLayout({
       orientation: Clutter.Orientation.HORIZONTAL,
       style: "margin-top: 10px;",
       x_align: Clutter.ActorAlign.CENTER,
     });
-
-    // Tengo que actualizar la maldita documentación. La pasaré a una WIKI de GH.
-
-   /* let docBtn = new St.Button({
-      label: _("Documentation"),
-      style_class: "codexbar-tab",
-      style: "margin-right: 10px;",
-    });
-    docBtn.connect("clicked", () => {
-      Gio.AppInfo.launch_default_for_uri(
-        "https://help.inled.es/help/codexbar-gnome",
-        null,
-      );
-    });
-    btnBox.add_child(docBtn);
-    */
 
     let closeBtn = new St.Button({
       label: _("Get Started!"),

@@ -11,7 +11,7 @@
       <summary>Refresh interval in minutes</summary>
     </key>
     <key name="providers" type="s">
-      <default>'[{"name": "Gemini", "command": "/home/linuxbrew/.linuxbrew/bin/codexbar --provider gemini --source api --format json"}]'</default>
+      <default>'[]'</default>
       <summary>JSON string of configured AI providers</summary>
     </key>
     <key name="display-mode" enum="org.gnome.shell.extensions.codexbar.DisplayMode">
