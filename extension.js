@@ -75,11 +75,11 @@ export default class CodexBarExtension extends Extension {
     });
     this._iconBox.add_child(this._iconFill);
 
-    // Per-provider text ("5h 3% · W 22% in 3h 15m"), shown instead of the
-    // bar when any provider is flagged showInPanel.
+    // Per-provider text, shown instead of the bar when providers are selected.
     this._panelTextBox = new St.BoxLayout({
       orientation: Clutter.Orientation.HORIZONTAL,
       y_align: Clutter.ActorAlign.CENTER,
+      x_expand: false,
       visible: false,
     });
     this._panelBox = new St.BoxLayout({
@@ -554,9 +554,17 @@ export default class CodexBarExtension extends Extension {
       }
       if (!logo) text = `${provider.name} ${text}`;
 
-      segment.add_child(
-        new St.Label({ text, y_align: Clutter.ActorAlign.CENTER }),
-      );
+      const label = new St.Label({
+        text,
+        y_align: Clutter.ActorAlign.CENTER,
+        x_align: Clutter.ActorAlign.START,
+        x_expand: false,
+      });
+      // St.Label defaults to end ellipsizing when its allocation is narrower
+      // than its natural width. Keep the compact panel text intact.
+      label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+      label.clutter_text.line_wrap = false;
+      segment.add_child(label);
       this._panelTextBox.add_child(segment);
     });
   }

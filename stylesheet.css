@@ -156,10 +156,10 @@
 }
 
 .codexbar-panel-segment {
-    spacing: 4px;
-    margin: 0 6px;
+    spacing: 2px;
+    margin: 0 3px;
 }
 
 .codexbar-panel-logo {
-    icon-size: 16px;
+    icon-size: 14px;
 }
