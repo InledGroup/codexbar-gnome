@@ -309,10 +309,13 @@ const panelUsage = {
   tertiary: { usedPercent: 50, windowSeconds: 7 * 24 * 3600 },
 };
 const panelChecks = [
-  [formatPanelText(panelUsage, "used"), "5h 3% · W 22% in 3h 15m"],
-  [formatPanelText(panelUsage, "remaining"), "5h 97% · W 78% in 3h 15m"],
-  [formatPanelText(panelUsage, "used", 3 * 3600 + 5 * 60), "5h 3% · W 22% in 10m"],
-  [formatPanelText(panelUsage, "used", 4 * 3600), "5h 3% · W 22%"],
+  [formatPanelText(panelUsage, "used"), "3% · 4h"],
+  [formatPanelText(panelUsage, "remaining"), "97% · 4h"],
+  [formatPanelText(panelUsage, "used", 3 * 3600 + 5 * 60), "3% · 10m"],
+  [formatPanelText(panelUsage, "used", 4 * 3600), "3%"],
+  [formatPanelText({ primary: { usedPercent: 1, windowSeconds: 43200, resetAfterSeconds: 3599 } }, "used"), "1% · 1h"],
+  [formatPanelText({ primary: { usedPercent: 1, windowSeconds: 43200, resetAfterSeconds: 3601 } }, "used"), "1% · 2h"],
+  [formatPanelText({ primary: { usedPercent: 1, windowSeconds: 43200, resetAfterSeconds: 30 * 3600 } }, "used"), "1% · 30h"],
   [formatPanelText({}, "used"), ""],
   [formatPanelText({ primary: { usedPercent: 0, windowSeconds: 0 } }, "used"), ""],
 ];
@@ -321,7 +324,7 @@ panelChecks.forEach(([actual, expected]) => {
     throw new Error(`Panel text: expected "${expected}", got "${actual}"`);
   }
 });
-console.log("✓ Panel text shows short windows and the primary reset countdown");
+console.log("✓ Panel text shows percent and a rounded next-reset countdown");
 
 const screenshotPace = calculateUsagePace({
   usedPercent: 2,
