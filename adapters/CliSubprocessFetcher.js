@@ -25,6 +25,14 @@ export class CliSubprocessFetcher extends UsageFetcher {
             throw new UsageApiError("No command configured / No hay ningún comando configurado.");
         }
 
+        // Reject shell metacharacters outright. GLib.shell_parse_argv() only
+        // tokenizes the string (no shell is invoked by spawnv()), but letting
+        // separators/substitution/redirection syntax through is unnecessary
+        // risk for a value that comes from user configuration.
+        if (/[;&|`$<>\n]|\$\(/.test(providerCommand)) {
+            throw new UsageApiError("Command contains unsupported characters / El comando contiene caracteres no admitidos.");
+        }
+
         let executable = "/home/linuxbrew/.linuxbrew/bin/codexbar";
         const commonPaths = [
             "/home/linuxbrew/.linuxbrew/bin/codexbar",
