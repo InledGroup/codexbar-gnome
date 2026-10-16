@@ -268,6 +268,9 @@ export default class CodexBarExtension extends Extension {
       this._activeProviderIndex = 0;
     }
 
+    // Draw the provider logos right away instead of waiting for the first
+    // CLI round-trip, which otherwise leaves the fallback icon up at login.
+    this._updatePanel();
     this._refreshData();
     this._setupTimeout();
   }
