@@ -16,6 +16,7 @@ A GNOME Shell extension to monitor AI provider usage metrics directly from the s
 - Render Code review usage when the Linux API supplies it
 - Add regression coverage for the new normalization and pace calculation
 - Added support to show AI economic expenditure
+- Follows the system language (Brazilian Portuguese included), with dates, numbers and money in the local format
 
 ## Updates  
 - Support Codex Spark usage tiers from the direct ChatGPT endpoint (`additional_rate_limits`)
