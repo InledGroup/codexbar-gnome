@@ -15,11 +15,17 @@ import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import {
   calculateUsagePace,
   deriveCreditsPercent,
-  formatPanelText,
   normalizeDetailSections,
   UsageApiClient,
 } from "./usageApi.js";
 import { loadToken, nullTokenSchema } from "./secret.js";
+import {
+  formatPanelText,
+  formatPercent,
+  formatReset,
+  localizeDetail,
+  localizeLabel,
+} from "./localize.js";
 
 // Debug trace is opt-in: set CODEXBAR_DEBUG=1 before starting the shell
 // (e.g. `CODEXBAR_DEBUG=1 gnome-shell --devkit`) to enable it.
@@ -550,7 +556,7 @@ export default class CodexBarExtension extends Extension {
       else if (entry.error) text = "!";
       else {
         const elapsed = (Date.now() - (entry.fetchedAt || Date.now())) / 1000;
-        text = formatPanelText(entry.data?.usage, displayMode, elapsed) || "–";
+        text = formatPanelText(entry.data?.usage, displayMode, elapsed, _) || "–";
       }
       if (!logo) text = `${provider.name} ${text}`;
 
@@ -832,9 +838,11 @@ export default class CodexBarExtension extends Extension {
 
     const usageEntries = tiers.map((tier, tierIdx) => {
       let tierData = usage[tier];
-      let title =
+      let title = localizeLabel(
         discoveredLabels[tierIdx] ||
-        tier.charAt(0).toUpperCase() + tier.slice(1);
+        tier.charAt(0).toUpperCase() + tier.slice(1),
+        _,
+      );
 
       if (isDegenerateTier(tierData)) {
         if (creditsPercent === null) {
@@ -873,8 +881,8 @@ export default class CodexBarExtension extends Extension {
         let percent = displayMode === "remaining" ? 100 - p : p;
         let labelText =
           displayMode === "remaining"
-            ? _("%s%% left").format(percent.toFixed(1))
-            : _("%s%% used").format(percent.toFixed(1));
+            ? _("%s%% left").format(formatPercent(percent))
+            : _("%s%% used").format(formatPercent(percent));
 
         let color = "#3584e4";
         if (displayMode === "remaining") {
@@ -903,7 +911,14 @@ export default class CodexBarExtension extends Extension {
         });
         statsBox.add_child(
           subtitleLabel({
-            text: tierData.resetDescription || "",
+            text:
+              (tierData.resetAfterSeconds
+                ? formatReset(
+                    tierData.resetAfterSeconds,
+                    (Date.now() - (activeData.fetchedAt || Date.now())) / 1000,
+                    _,
+                  )
+                : tierData.resetDescription) || "",
             x_align: Clutter.ActorAlign.END,
             x_expand: true,
           }),
@@ -994,7 +1009,7 @@ export default class CodexBarExtension extends Extension {
         let currency = usage.providerCost.currencyCode || "USD";
         let used = usage.providerCost.used || 0;
         let limit = usage.providerCost.limit || 0;
-        let formatter = new Intl.NumberFormat("en-US", {
+        let formatter = new Intl.NumberFormat(undefined, {
           style: "currency",
           currency: currency,
         });
@@ -1051,7 +1066,7 @@ export default class CodexBarExtension extends Extension {
       if (section.title) {
         groupBox.add_child(
           new St.Label({
-            text: section.title,
+            text: localizeDetail(section.title, _),
             style_class: "codexbar-detail-title",
           }),
         );
@@ -1064,7 +1079,7 @@ export default class CodexBarExtension extends Extension {
         });
 
         const labelWidget = new St.Label({
-          text: row.label,
+          text: localizeDetail(row.label, _),
           style_class: "codexbar-detail-label",
         });
         labelWidget.clutter_text.ellipsize = Pango.EllipsizeMode.END;
@@ -1072,7 +1087,7 @@ export default class CodexBarExtension extends Extension {
         rowBox.add_child(labelWidget);
 
         const valueWidget = new St.Label({
-          text: row.value,
+          text: localizeDetail(row.value, _),
           style_class: "codexbar-detail-value",
           x_align: Clutter.ActorAlign.END,
           x_expand: true,
@@ -1084,7 +1099,7 @@ export default class CodexBarExtension extends Extension {
 
         if (row.secondaryValue) {
           const noteWidget = new St.Label({
-            text: row.secondaryValue,
+            text: localizeDetail(row.secondaryValue, _),
             style_class: "codexbar-detail-note",
           });
           noteWidget.clutter_text.line_wrap = true;
