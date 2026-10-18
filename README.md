@@ -144,8 +144,7 @@ This project is licensed under [MIT-INLED](https://license.inled.es). Click on t
 > [!WARNING]
 > If you base your code on ours or remix it using AI, you must credit the original repository out of respect for the contributors and the creator.
 
-## About:  
-I've been working on a lot of projects lately and wasn't sure if people really cared about them until this one completely brought back my excitement for development and showed me how useful it can be for users. The GNOME community is fantastic.
+
 
 > [!NOTE]
 > **ABOUT AI**  
