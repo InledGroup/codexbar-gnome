@@ -6,10 +6,7 @@ import GLib from "gi://GLib";
 import St from "gi://St";
 import Clutter from "gi://Clutter";
 import Pango from "gi://Pango";
-import {
-  Extension,
-  gettext as _,
-} from "resource:///org/gnome/shell/extensions/extension.js";
+import { Extension } from "resource:///org/gnome/shell/extensions/extension.js";
 import * as PanelMenu from "resource:///org/gnome/shell/ui/panelMenu.js";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import {
@@ -20,11 +17,14 @@ import {
 } from "./usageApi.js";
 import { loadToken, nullTokenSchema } from "./secret.js";
 import {
+  applyLanguage,
+  currentLanguage,
   formatPanelText,
   formatPercent,
   formatReset,
   localizeDetail,
   localizeLabel,
+  tr as _,
 } from "./localize.js";
 
 // Debug trace is opt-in: set CODEXBAR_DEBUG=1 before starting the shell
@@ -66,6 +66,7 @@ export default class CodexBarExtension extends Extension {
     this._apiClient = new UsageApiClient(this.path);
     this._copyTimeouts = [];
 
+    this._applyLanguage();
     this._indicator = new PanelMenu.Button(0.0, _("CodexBar"), false);
 
     this._iconBox = new St.BoxLayout({
@@ -159,6 +160,11 @@ export default class CodexBarExtension extends Extension {
       "changed::show-pacing-info", () => this._updateUI(),
       "changed::show-provider-details", () => this._updateUI(),
       "changed::first-run", () => this._updateUI(),
+      "changed::language", () => {
+        this._applyLanguage();
+        this._updateUI();
+        this._refreshData();
+      },
       "changed::dev-custom-output-enabled", () => this._onSettingsChanged(),
       "changed::dev-custom-output-provider-name", () => this._onSettingsChanged(),
       "changed::dev-custom-output-json", () => this._onSettingsChanged(),
@@ -171,6 +177,20 @@ export default class CodexBarExtension extends Extension {
       this._updatePanel();
       return GLib.SOURCE_CONTINUE;
     });
+  }
+
+  // Load the catalog for the `language` setting; English is the fallback.
+  _applyLanguage() {
+    const domain = this.metadata["gettext-domain"] ?? this.uuid;
+    applyLanguage(this._settings.get_string("language"), (lang) => {
+      const mo = this.dir
+        .get_child("locale")
+        .get_child(lang)
+        .get_child("LC_MESSAGES")
+        .get_child(`${domain}.mo`);
+      return mo.query_exists(null) ? mo.load_contents(null)[1] : null;
+    });
+    logDev(`UI language: ${currentLanguage()}`);
   }
 
   /**
@@ -1259,6 +1279,40 @@ export default class CodexBarExtension extends Extension {
         style: "font-weight: bold; font-size: 1.25em; margin-bottom: 5px;",
       }),
     );
+
+    // Language names are shown in their own language, so they are not
+    // passed through the catalog.
+    const langRow = new St.BoxLayout({
+      orientation: Clutter.Orientation.HORIZONTAL,
+      style: "spacing: 6px; margin-bottom: 8px;",
+      x_align: Clutter.ActorAlign.START,
+    });
+    langRow.add_child(
+      new St.Label({
+        text: _("Language:"),
+        style: "font-size: 0.95em; margin-top: 4px;",
+      }),
+    );
+    const currentLang = this._settings.get_string("language");
+    [
+      ["en", "English"],
+      ["es", "Español"],
+      ["pt_BR", "Português (Brasil)"],
+    ].forEach(([code, name]) => {
+      const langBtn = new St.Button({
+        label: name,
+        style_class: "codexbar-tab",
+        style:
+          code === currentLang
+            ? "background-color: #3584e4;"
+            : "background-color: rgba(127,127,127,0.15);",
+      });
+      langBtn.connect("clicked", () =>
+        this._settings.set_string("language", code),
+      );
+      langRow.add_child(langBtn);
+    });
+    box.add_child(langRow);
 
     box.add_child(
       new St.Label({

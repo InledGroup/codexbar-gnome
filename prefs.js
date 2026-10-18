@@ -5,10 +5,8 @@ import GLib from "gi://GLib";
 import GObject from "gi://GObject";
 import Gtk from "gi://Gtk";
 import Adw from "gi://Adw";
-import {
-  ExtensionPreferences,
-  gettext as _,
-} from "resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js";
+import { ExtensionPreferences } from "resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js";
+import { applyLanguage, tr as _ } from "./localize.js";
 import {
   storeToken,
   loadToken,
@@ -1132,6 +1130,15 @@ const CodexBarPrefsPage = GObject.registerClass(
 export default class CodexBarPreferences extends ExtensionPreferences {
   fillPreferencesWindow(window) {
     const settings = this.getSettings();
+    const domain = this.metadata["gettext-domain"] ?? this.uuid;
+    applyLanguage(settings.get_string("language"), (lang) => {
+      const mo = this.dir
+        .get_child("locale")
+        .get_child(lang)
+        .get_child("LC_MESSAGES")
+        .get_child(`${domain}.mo`);
+      return mo.query_exists(null) ? mo.load_contents(null)[1] : null;
+    });
     const page = new CodexBarPrefsPage(settings, this.path);
     window.add(page);
 

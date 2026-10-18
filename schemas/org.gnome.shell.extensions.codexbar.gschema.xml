@@ -22,6 +22,11 @@
       <default>true</default>
       <summary>Whether this is the first time the extension is run</summary>
     </key>
+    <key name="language" type="s">
+      <default>'en'</default>
+      <summary>UI language</summary>
+      <description>Language for the extension UI: en, es or pt_BR. English is the fallback.</description>
+    </key>
     <key name="show-logos" type="b">
       <default>true</default>
       <summary>Whether to show provider logos in the tabs</summary>

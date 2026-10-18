@@ -5,7 +5,15 @@ import {
   normalizeDetailSections,
   UsageApiClient,
 } from "./usageApi.js";
-import { formatPanelText } from "./localize.js";
+import {
+  applyLanguage,
+  currentLanguage,
+  formatPanelText,
+  formatPercent,
+  parseMo,
+  setCatalog,
+  tr,
+} from "./localize.js";
 import {
   adoptCustomProviders,
   buildCliCommand,
@@ -878,4 +886,99 @@ if (!normalizedDeepSeek.labels || normalizedDeepSeek.labels[0] !== "Balance") {
   throw new Error(`Expected labels[0] to be 'Balance', got ${JSON.stringify(normalizedDeepSeek.labels)}`);
 }
 console.log("✓ DeepSeek credit balance tier and rateWindowLabels normalize correctly");
+
+// Minimal little-endian GNU .mo built in memory: header entry + two strings.
+const buildMo = (pairs) => {
+  const encoder = new TextEncoder();
+  const originals = pairs.map(([id]) => encoder.encode(id));
+  const translations = pairs.map(([, str]) => encoder.encode(str));
+  const headerIds = encoder.encode(""); // metadata entry, msgstr not in `pairs`
+  const headerStrs = encoder.encode("Content-Type: text/plain\\n");
+  const allIds = [headerIds, ...originals];
+  const allStrs = [headerStrs, ...translations];
+  const headerSize = 28;
+  const tableSize = allIds.length * 8;
+  const idsStart = headerSize + tableSize * 2;
+  let blobLength = 0;
+  const idOffsets = allIds.map((b) => {
+    const off = idsStart + blobLength;
+    blobLength += b.length;
+    return [b.length, off];
+  });
+  const strStart = idsStart + blobLength;
+  blobLength = 0;
+  const strOffsets = allStrs.map((b) => {
+    const off = strStart + blobLength;
+    blobLength += b.length;
+    return [b.length, off];
+  });
+  const u32 = (n) => {
+    const b = new Uint8Array(4);
+    new DataView(b.buffer).setUint32(0, n, true);
+    return b;
+  };
+  const parts = [
+    u32(0x950412de), u32(0), u32(allIds.length), u32(headerSize),
+    u32(headerSize + allIds.length * 8), u32(0), u32(0),
+  ];
+  idOffsets.concat(strOffsets).forEach(([len, off]) => {
+    parts.push(u32(len), u32(off));
+  });
+  parts.push(...allIds, ...allStrs);
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let pos = 0;
+  parts.forEach((p) => {
+    out.set(p, pos);
+    pos += p.length;
+  });
+  return out;
+};
+
+const mo = buildMo([
+  ["Weekly Window", "Ventana semanal"],
+  ["%s%% left", "queda %s%%"],
+]);
+const parsed = parseMo(mo);
+if (parsed.get("Weekly Window") !== "Ventana semanal") {
+  throw new Error(`MO parse failed: ${JSON.stringify([...parsed])}`);
+}
+if (parsed.get("%s%% left") !== "queda %s%%") {
+  throw new Error("MO parse lost a format string");
+}
+if (parsed.size !== 2) {
+  throw new Error(`Header entry should be skipped, got size ${parsed.size}`);
+}
+if (parseMo(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])).size !== 0) {
+  throw new Error("Bad magic should yield an empty catalog");
+}
+console.log("✓ .mo parser reads catalogs and skips the header entry");
+
+setCatalog("es", parsed);
+if (currentLanguage() !== "es") throw new Error("setCatalog should switch language");
+if (tr("Weekly Window") !== "Ventana semanal") throw new Error("tr should translate");
+if (tr("Untranslated") !== "Untranslated") throw new Error("tr should fall back to msgid");
+if (formatPercent(6.5) !== "6,5") {
+  throw new Error(`es locale should format 6,5, got ${formatPercent(6.5)}`);
+}
+setCatalog("en", parsed);
+if (currentLanguage() !== "en") throw new Error("en should be selected");
+if (tr("Weekly Window") !== "Weekly Window") {
+  throw new Error("English must not load a catalog");
+}
+if (formatPercent(6.5) !== "6.5") {
+  throw new Error(`en locale should format 6.5, got ${formatPercent(6.5)}`);
+}
+setCatalog("xx", parsed); // unknown -> English fallback
+if (currentLanguage() !== "en") throw new Error("Unknown language should fall back to en");
+
+applyLanguage("es", (lang) => (lang === "es" ? mo : null));
+if (tr("Weekly Window") !== "Ventana semanal") throw new Error("applyLanguage should install the catalog");
+applyLanguage("pt_BR", () => { throw new Error("unreadable"); });
+if (currentLanguage() !== "en" || tr("Weekly Window") !== "Weekly Window") {
+  throw new Error("Unreadable catalog should fall back to English");
+}
+applyLanguage("en", () => mo);
+if (tr("Weekly Window") !== "Weekly Window") throw new Error("en must ignore any catalog");
+setCatalog("en", null);
+console.log("✓ Language selection is explicit, with English as the fallback");
 
