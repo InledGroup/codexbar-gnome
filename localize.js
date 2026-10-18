@@ -99,7 +99,7 @@ export const localizeDetail = (text, tr) => {
 };
 
 /** Panel text: "5h 7% · 7d 6% in 3h 9min". */
-export const formatPanelText = (usage, displayMode, elapsedSeconds, tr) => {
+export const formatPanelText = (usage, displayMode, elapsedSeconds, tr = (s) => s) => {
   if (!usage) return "";
   const parts = [];
   let resetSeconds = null;
@@ -115,8 +115,18 @@ export const formatPanelText = (usage, displayMode, elapsedSeconds, tr) => {
     parts.push(label ? `${label} ${percent}%` : `${percent}%`);
     if (resetSeconds === null) resetSeconds = (win.resetAfterSeconds || 0) - (elapsedSeconds || 0);
   }
-  if (parts.length === 0) return "";
-  let text = parts.join(" · ");
-  if (resetSeconds > 0) text += fill(tr(" in %s"), formatDuration(resetSeconds));
-  return text;
+  if (parts.length > 0) {
+    let text = parts.join(" · ");
+    if (resetSeconds > 0) text += fill(tr(" in %s"), formatDuration(resetSeconds));
+    return text;
+  }
+
+  // Balance-only providers (e.g. DeepSeek) or plain provider cost.
+  const balance = usage.primary?.resetDescription?.match(/^\$[0-9.]+/);
+  if (balance) return balance[0];
+  if (usage.providerCost && typeof usage.providerCost.used === "number") {
+    const symbol = usage.providerCost.currencyCode === "USD" ? "$" : "";
+    return `${symbol}${usage.providerCost.used.toFixed(2)}`;
+  }
+  return "";
 };

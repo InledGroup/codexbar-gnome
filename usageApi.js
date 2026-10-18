@@ -156,60 +156,6 @@ export const formatResetDescription = (seconds, windowSeconds, now = new Date())
     return `Resets at ${resetStr} (in ${hours}h)`;
 };
 
-// Session + weekly only, like the macOS menu bar; extra per-model tiers stay in the popup.
-const PANEL_TIERS = ['primary', 'secondary'];
-
-const shortWindowLabel = (windowSeconds) => {
-    if (!windowSeconds) return '';
-    const hours = Math.round(windowSeconds / 3600);
-    if (hours < 24) return `${hours}h`;
-    const days = Math.round(hours / 24);
-    return days === 7 ? 'W' : `${days}d`;
-};
-
-/**
- * Compact panel text in the style of the macOS menu bar, e.g.
- * less the seconds elapsed since the data was fetched.
- */
-export const formatPanelText = (usage, displayMode, elapsedSeconds = 0) => {
-    if (!usage) return '';
-    const parts = [];
-    let resetSeconds = null;
-    for (const tier of PANEL_TIERS) {
-        const win = usage[tier];
-        if (!win || win.usedPercent === undefined) continue;
-        // Placeholder tiers (e.g. OpenRouter's balance) aren't usage windows.
-        if (!win.windowSeconds && win.usedPercent === 0) continue;
-        const used = Math.min(100, Math.max(0, parseFloat(win.usedPercent) || 0));
-        const percent = Math.round(displayMode === 'remaining' ? 100 - used : used);
-        const label = shortWindowLabel(win.windowSeconds);
-        parts.push(label ? `${label} ${percent}%` : `${percent}%`);
-        if (resetSeconds === null) resetSeconds = (win.resetAfterSeconds || 0) - elapsedSeconds;
-    }
-    if (parts.length > 0) {
-        let text = parts.join(' · ');
-        if (resetSeconds > 0) {
-            const minutes = Math.ceil(resetSeconds / 60);
-            const h = Math.floor(minutes / 60);
-            const m = minutes % 60;
-            text += h > 0 ? ` in ${h}h ${m}m` : ` in ${m}m`;
-        }
-        return text;
-    }
-
-    // Balance-only tiers (e.g. DeepSeek) or providerCost
-    if (usage.primary?.resetDescription) {
-        const match = usage.primary.resetDescription.match(/^\$[0-9.]+/);
-        if (match) return match[0];
-    }
-    if (usage.providerCost && typeof usage.providerCost.used === 'number') {
-        const currency = usage.providerCost.currencyCode === 'USD' ? '$' : '';
-        return `${currency}${usage.providerCost.used.toFixed(2)}`;
-    }
-
-    return '';
-};
-
 /**
  * Sanitize the provider-supplied `details` array from the codexbar CLI into a
  * flat, render-safe shape. Charts are intentionally dropped (not rendered yet).
