@@ -1,11 +1,11 @@
 import {
   calculateUsagePace,
   deriveCreditsPercent,
-  formatPanelText,
   formatResetDescription,
   normalizeDetailSections,
   UsageApiClient,
 } from "./usageApi.js";
+import { formatPanelText } from "./localize.js";
 import {
   adoptCustomProviders,
   buildCliCommand,
@@ -327,13 +327,14 @@ const panelUsage = {
   tertiary: { usedPercent: 50, windowSeconds: 7 * 24 * 3600 },
 };
 const panelChecks = [
-  [formatPanelText(panelUsage, "used"), "5h 3% · W 22% in 3h 15m"],
-  [formatPanelText(panelUsage, "remaining"), "5h 97% · W 78% in 3h 15m"],
-  [formatPanelText(panelUsage, "used", 3 * 3600 + 5 * 60), "5h 3% · W 22% in 10m"],
-  [formatPanelText(panelUsage, "used", 4 * 3600), "5h 3% · W 22%"],
+  [formatPanelText(panelUsage, "used"), "5h 3% · 7d 22% in 3h 15min"],
+  [formatPanelText(panelUsage, "remaining"), "5h 97% · 7d 78% in 3h 15min"],
+  [formatPanelText(panelUsage, "used", 3 * 3600 + 5 * 60), "5h 3% · 7d 22% in 10min"],
+  [formatPanelText(panelUsage, "used", 4 * 3600), "5h 3% · 7d 22%"],
   [formatPanelText({}, "used"), ""],
   [formatPanelText({ primary: { usedPercent: 0, windowSeconds: 0 } }, "used"), ""],
   [formatPanelText({ primary: { usedPercent: 0, windowSeconds: 0, resetDescription: "$7.53 (Paid: $7.53 / Granted: $0.00)" } }, "used"), "$7.53"],
+  [formatPanelText({ providerCost: { used: 12.345, currencyCode: "USD" } }, "used"), "$12.35"],
 ];
 panelChecks.forEach(([actual, expected]) => {
   if (actual !== expected) {
