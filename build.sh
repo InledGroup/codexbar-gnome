@@ -18,6 +18,7 @@ gnome-extensions pack \
     --extra-source=core/ \
     --extra-source=adapters/ \
     --extra-source=media/ \
+    --extra-source=LICENSE.md \
     --schema=schemas/org.gnome.shell.extensions.codexbar.gschema.xml \
     --podir=po \
     --force

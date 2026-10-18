@@ -3,9 +3,8 @@
 // countdowns and the panel text. Kept free of gi:// imports so it can be
 // unit tested; callers pass the gettext function as `tr`.
 
-// UI language. The catalog is loaded from the extension's own locale/ folder
-// (GNU .mo) so the language is an explicit user choice (the `language`
-// setting) and never depends on the locale of the shell process.
+// UI language: catalogs are read from the extension's own locale/ folder so
+// the `language` setting decides, not the shell process locale.
 const SUPPORTED_LANGUAGES = ["en", "es", "pt_BR"];
 let _catalog = new Map();
 let _language = "en";

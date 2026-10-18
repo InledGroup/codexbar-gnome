@@ -1172,7 +1172,6 @@ export default class CodexBarPreferences extends ExtensionPreferences {
       page = buildPage();
     });
 
-    // Null out token schema when preferences window is closed
     // Null out the token schema when the preferences window closes
     window.connect("destroy", () => {
       destroyed = true;

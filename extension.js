@@ -24,13 +24,14 @@ import {
   formatReset,
   localizeDetail,
   localizeLabel,
+  setCatalog,
   tr as _,
 } from "./localize.js";
 
 // Debug trace is opt-in: set CODEXBAR_DEBUG=1 before starting the shell
 // (e.g. `CODEXBAR_DEBUG=1 gnome-shell --devkit`) to enable it.
 function logDev(msg) {
-  if (GLib.getenv("CODEXBAR_DEBUG")) console.log(`[CodexBar] ${msg}`);
+  if (GLib.getenv("CODEXBAR_DEBUG")) console.debug(`[CodexBar] ${msg}`);
 }
 
 // Secondary text keeps the theme's foreground colour and is dimmed with actor
@@ -94,8 +95,7 @@ export default class CodexBarExtension extends Extension {
     });
     this._panelBox.add_child(this._iconBox);
     this._panelBox.add_child(this._panelTextBox);
-    // Numeric percentage beside the battery icon; used vs remaining follows
-    // the display-mode setting.
+    // Numeric percentage beside the battery icon; meaning follows display-mode.
     this._percentLabel = new St.Label({
       text: "",
       y_align: Clutter.ActorAlign.CENTER,
@@ -233,6 +233,7 @@ export default class CodexBarExtension extends Extension {
     if (this._settings) {
       this._settings.disconnectObject(this);
       this._settings = null;
+      setCatalog("en", null); // drop the translation catalog with the extension
     }
 
     if (this._iconFill) {
@@ -1311,8 +1312,7 @@ export default class CodexBarExtension extends Extension {
       }),
     );
 
-    // Language names are shown in their own language, so they are not
-    // passed through the catalog.
+    // Language names stay in their own language; not passed to gettext.
     const langRow = new St.BoxLayout({
       orientation: Clutter.Orientation.HORIZONTAL,
       style: "spacing: 6px; margin-bottom: 8px;",
