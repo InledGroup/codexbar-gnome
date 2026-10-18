@@ -1,28 +1,41 @@
-# CodexBar for GNOME
+# CodexBar for GNOME  
 
-A GNOME Shell extension to monitor AI provider usage metrics directly from the system panel. This extension acts as a graphical interface for the CodexBar CLI, providing real-time visibility into your API quotas and usage tiers.
+> FEATURED on Codexbar Official repo!
 
-![CodexBar Panel](<demo.gif>)
+The best GNOME Shell extension to use Codexbar. The most used Codexbar port for GNOME. Feel free to contribute and join our community (links below)
+
+![CodexBar Panel](<demo.gif>)    
+(TO DO: Update this image)
 
 ## Features
 
-- Real-time monitoring of AI provider usage (Gemini, OpenAI, etc).
-- Support for standard Codex and Codex Spark 5-hour/weekly usage tiers
-- Toggle between Remaining Quota and Used Quota display modes.
-- Automatic background refreshes with configurable intervals.
-- Visual warnings (color changes) when reaching quota limits.
-- Automatic resolution of CodexBar CLI paths (Homebrew supported).
-- Calculate and display weekly usage pace from the existing quota window
-- Render Code review usage when the Linux API supplies it
-- Add regression coverage for the new normalization and pace calculation
-- Added support to show AI economic expenditure
-- Follows the system language (Brazilian Portuguese included), with dates, numbers and money in the local format
+- Shows remaining usage/spent + economic expense/remaining
+- Supports a large number of providers + you can add yours
+- Refreshes according to the interval you configure
+- Supports different information extraction methods depending on provider
+- You can show the individual usage of each one in the top bar / show the general summary
+- Indicates what time the usage will restart
+- Calculate if it will be enough for your day of use
+- It is translated and you can translate it to your language
+- **And much more**
+
+---
+## Discover my main project [Pulsar OS](https://os.inled.es), which I am dedicating more time to and has a great friendly community for beginners and professionals! It's already on Distrowatch!
+---
+## Join the Community
+
+We are a Linux community where everyone is welcome, from beginners to professionals, without ideology or elitism. Join us!
+
+- **Discord**: [Join us on Discord!](https://link.inled.es/discord)
+- **Telegram**: [Join us on Telegram!](https://link.inled.es/telegram)
+- **Matrix**: [Join the Matrix server](https://matrix.inled.es)
+- **YouTube**: [Inled Group YouTube Channel](https://www.youtube.com/@inledgroup)
+- **X (Twitter)**: [@inledgroup on X](https://x.com/inledgroup)
+
 
 ## Updates  
-- Support Codex Spark usage tiers from the direct ChatGPT endpoint (`additional_rate_limits`)
-- Render provider-supplied detail sections (OpenRouter credits, API key budget, spend history) with a new `show-provider-details` toggle
-- Derive a meaningful usage percent for balance-based providers (e.g. OpenRouter) from the Credits / API key sections
-- Welcome screen now installs the cookie importer and SSL helper scripts directly from the repo (raw GitHub) instead of PyPI
+- Added translations
+- Merged a lot of really good pr's!
 
 ## Requirements
 
@@ -59,7 +72,7 @@ mkdir -p ~/.local/bin && curl -fsSL https://raw.githubusercontent.com/InledGroup
 ## Installation
 
 ### From EGO
-Reviewed by the great GNOME experts, with the confidence of correct operation and stability.
+You can download it from the official GNOME store. It takes longer to be updated.
 [https://extensions.gnome.org/extension/9841/codexbar/](https://extensions.gnome.org/extension/9841/codexbar/)
 
 ### From Github  
@@ -70,9 +83,8 @@ Reviewed by the great GNOME experts, with the confidence of correct operation an
       - **For fast development and iteration**: Run `dbus-run-session gnome-shell --wayland --devkit`. You need to have installed Mutter Devkit
    - On X11: `Alt+F2` and type `r` and press enter.
 
-### From Unofficial Gnome Shell Store
-I am working on a very interesting concept to present, which is the automated review of extensions with AI. 
-The package is not updated very regularly, the site is still a concept, but it can be tested [https://extensions-gnome.github.io/?ext=codexbar%40inled.es](https://extensions-gnome.github.io/?ext=codexbar%40inled.es)
+### From Pulsar Store  
+[Coming soon](https://store-os.inled.es)
 
 ## Configuration
 
@@ -124,19 +136,10 @@ You can choose how metrics are displayed:
 - **Used**: Shows the percentage of quota consumed.
 
 
-## Join the Community
-
-Follow us on social media for updates, discussions, and support:
-
-- **Discord**: [Join our Discord server](https://discord.com/invite/PSeTkDMnr)
-- **Matrix**: [Join the Matrix server](https://matrix.inled.es)
-- **Mastodon**: [@inled on mastodon.social](https://mastodon.social/@inled)
-- **YouTube**: [Inled Group YouTube Channel](https://www.youtube.com/@inledgroup)
-- **X (Twitter)**: [@inledgroup on X](https://x.com/inledgroup)
 
 ## License
 
-This project is licensed under the terms of the GNU General Public License v2.0 or later. Contributions are welcome! 
+This project is licensed under [MIT-INLED](https://license.inled.es). Click on the name to see the license.
 
 > [!WARNING]
 > If you base your code on ours or remix it using AI, you must credit the original repository out of respect for the contributors and the creator.
@@ -145,5 +148,5 @@ This project is licensed under the terms of the GNU General Public License v2.0 
 I've been working on a lot of projects lately and wasn't sure if people really cared about them until this one completely brought back my excitement for development and showed me how useful it can be for users. The GNOME community is fantastic.
 
 > [!NOTE]
-> **AI DISCLAIMER**
-> AI has been used on this project. ALL THE CODE that AI made has been reviewed and edited by humans (you can see the difference between ai comments and human-made comments XD)
+> **ABOUT AI**  
+> AI is used to develop this project and we accept contributions with AI as long as you review what the AI ​​does, have tested it and do not rewrite many lines of code, and the PR and Issues must be written by a human, simply so that you are not talking to an AI that you do not know if it is AI or human. Our community is friendly, without ideology or politics, and you can join us on the channels described above. Being against positioning ourselves ideologically, we are not against AI, so its use is welcome
