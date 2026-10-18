@@ -370,9 +370,9 @@ const CodexBarPrefsPage = GObject.registerClass(
       );
       socialBox.append(
         createSocialBtn(
-          "mastodon",
-          "https://mastodon.social/@inled",
-          "Mastodon",
+          "telegram",
+          "https://link.inled.es/telegram",
+          "Telegram",
         ),
       );
       socialBox.append(
