@@ -94,6 +94,15 @@ export default class CodexBarExtension extends Extension {
     });
     this._panelBox.add_child(this._iconBox);
     this._panelBox.add_child(this._panelTextBox);
+    // Numeric percentage beside the battery icon; used vs remaining follows
+    // the display-mode setting.
+    this._percentLabel = new St.Label({
+      text: "",
+      y_align: Clutter.ActorAlign.CENTER,
+      style_class: "codexbar-panel-percent",
+      visible: false,
+    });
+    this._panelBox.add_child(this._percentLabel);
     this._indicator.add_child(this._panelBox);
 
     this._headerBox = new St.BoxLayout({
@@ -233,6 +242,10 @@ export default class CodexBarExtension extends Extension {
     if (this._panelTextBox) {
       this._panelTextBox.destroy();
       this._panelTextBox = null;
+    }
+    if (this._percentLabel) {
+      this._percentLabel.destroy();
+      this._percentLabel = null;
     }
     if (this._panelBox) {
       this._panelBox.destroy();
@@ -559,6 +572,17 @@ export default class CodexBarExtension extends Extension {
     this._iconBox.visible = shown.length === 0;
     this._panelTextBox.visible = shown.length > 0;
     this._panelTextBox.destroy_all_children();
+    if (this._percentLabel) {
+      this._percentLabel.visible = shown.length === 0;
+      this._percentLabel.set_text(
+        `${formatPercent(Math.round(this._activePercent ?? 0))}%`,
+      );
+    }
+    logDev(
+      shown.length === 0
+        ? `Panel: battery at ${this._percentLabel?.text}`
+        : `Panel: ${shown.length} provider text segment(s)`,
+    );
 
     const displayMode = this._settings.get_string("display-mode");
     shown.forEach(({ provider, entry }) => {
@@ -682,6 +706,7 @@ export default class CodexBarExtension extends Extension {
     }
 
     let activePercent = tierCount > 0 ? totalPercent / tierCount : 0;
+    this._activePercent = activePercent;
 
     const showLogos = this._settings.get_boolean("show-logos");
 
@@ -937,6 +962,12 @@ export default class CodexBarExtension extends Extension {
           orientation: Clutter.Orientation.HORIZONTAL,
           x_expand: true,
         });
+        statsBox.add_child(
+          subtitleLabel({
+            text: labelText,
+            x_align: Clutter.ActorAlign.START,
+          }),
+        );
         statsBox.add_child(
           subtitleLabel({
             text:

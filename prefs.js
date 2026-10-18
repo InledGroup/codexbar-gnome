@@ -433,6 +433,23 @@ const CodexBarPrefsPage = GObject.registerClass(
       });
       group.add(displayModeRow);
 
+      const languageRow = new Adw.ComboRow({
+        title: _("Language"),
+        // Language names stay in their own language, so no gettext here.
+        model: new Gtk.StringList({
+          strings: ["English", "Español", "Português (Brasil)"],
+        }),
+        selected: { en: 0, es: 1, pt_BR: 2 }[
+          this._settings.get_string("language")
+        ] ?? 0,
+      });
+      languageRow.connect("notify::selected", () => {
+        const lang = ["en", "es", "pt_BR"][languageRow.selected] ?? "en";
+        if (lang !== this._settings.get_string("language"))
+          this._settings.set_string("language", lang);
+      });
+      group.add(languageRow);
+
       const showLogosRow = new Adw.SwitchRow({
         title: _("Show Provider Logos"),
         subtitle: _(
@@ -1131,20 +1148,34 @@ export default class CodexBarPreferences extends ExtensionPreferences {
   fillPreferencesWindow(window) {
     const settings = this.getSettings();
     const domain = this.metadata["gettext-domain"] ?? this.uuid;
-    applyLanguage(settings.get_string("language"), (lang) => {
-      const mo = this.dir
-        .get_child("locale")
-        .get_child(lang)
-        .get_child("LC_MESSAGES")
-        .get_child(`${domain}.mo`);
-      return mo.query_exists(null) ? mo.load_contents(null)[1] : null;
+    const buildPage = () => {
+      applyLanguage(settings.get_string("language"), (lang) => {
+        const mo = this.dir
+          .get_child("locale")
+          .get_child(lang)
+          .get_child("LC_MESSAGES")
+          .get_child(`${domain}.mo`);
+        return mo.query_exists(null) ? mo.load_contents(null)[1] : null;
+      });
+      const page = new CodexBarPrefsPage(settings, this.path);
+      window.add(page);
+      return page;
+    };
+
+    let page = buildPage();
+    let destroyed = false;
+
+    // Rebuild so every row shows the newly picked language right away.
+    settings.connect("changed::language", () => {
+      if (destroyed) return;
+      window.remove(page);
+      page = buildPage();
     });
-    const page = new CodexBarPrefsPage(settings, this.path);
-    window.add(page);
 
     // Null out token schema when preferences window is closed
     // Null out the token schema when the preferences window closes
     window.connect("destroy", () => {
+      destroyed = true;
       nullTokenSchema();
     });
   }
