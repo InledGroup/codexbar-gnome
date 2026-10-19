@@ -1,6 +1,8 @@
 import {
   calculateUsagePace,
   deriveCreditsPercent,
+  extractWindowLabels,
+  parseTextWindowLabels,
   formatResetDescription,
   normalizeDetailSections,
   UsageApiClient,
@@ -982,3 +984,24 @@ if (tr("Weekly Window") !== "Weekly Window") throw new Error("en must ignore any
 setCatalog("en", null);
 console.log("✓ Language selection is explicit, with English as the fallback");
 
+
+// Labels come from the CLI JSON; the text output is only a fallback and its
+// "Pace:" lines are not window labels.
+const jsonLabels = extractWindowLabels({ rateWindowLabels: { primary: "Session", secondary: "Weekly" } });
+if (JSON.stringify(jsonLabels) !== JSON.stringify(["Session", "Weekly"])) {
+  throw new Error(`rateWindowLabels: got ${JSON.stringify(jsonLabels)}`);
+}
+const gapLabels = extractWindowLabels({ rateWindowLabels: { primary: "Session", tertiary: "Opus" } });
+if (JSON.stringify(gapLabels) !== JSON.stringify(["Session", "", "Opus"])) {
+  throw new Error(`rateWindowLabels with a gap: got ${JSON.stringify(gapLabels)}`);
+}
+if (extractWindowLabels({}).length !== 0 || extractWindowLabels(null).length !== 0) {
+  throw new Error("Payload without rateWindowLabels should yield no labels");
+}
+const textLabels = parseTextWindowLabels(
+  "Session: 98% left\nPace: 25% in reserve | Expected 70% used\nWeekly: 8% left\nPace: 30% in deficit\n",
+);
+if (JSON.stringify(textLabels) !== JSON.stringify(["Session", "Weekly"])) {
+  throw new Error(`Text label fallback: got ${JSON.stringify(textLabels)}`);
+}
+console.log("✓ Window labels are read from the CLI JSON, with a text fallback that skips Pace");

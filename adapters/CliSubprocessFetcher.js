@@ -2,14 +2,15 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import { UsageFetcher } from '../core/ports/UsageFetcher.js';
-import { UsageApiError } from '../usageApi.js';
+import { UsageApiError, extractWindowLabels, parseTextWindowLabels } from '../usageApi.js';
 
 /**
  * ADAPTER (Hexagonal Architecture)
  * Implementation of the UsageFetcher port to run the external 'codexbar' CLI
  * binary as a subprocess. It resolves the executable path dynamically, invokes
- * the tool, and parses stdout/stderr into structured JS objects. It also runs a
- * quick discovery pass to read the text labels for the provider's active windows.
+ * the tool, and parses stdout/stderr into structured JS objects. Window labels
+ * come from the JSON payload; older CLI versions without them fall back to a
+ * second run that reads the text output.
  */
 export class CliSubprocessFetcher extends UsageFetcher {
     constructor(extensionPath = null) {
@@ -18,7 +19,7 @@ export class CliSubprocessFetcher extends UsageFetcher {
     }
 
     /**
-     * Run the command, parse the output, and discover labels.
+     * Run the command, parse the output, and resolve window labels.
      */
     async fetch(providerCommand, cancellable = null) {
         if (!providerCommand) {
@@ -119,50 +120,14 @@ export class CliSubprocessFetcher extends UsageFetcher {
         const trimmedStdout = stdout.trim();
         const trimmedStderr = stderr.trim();
 
-        let labels = [];
-        try {
-            const discoveryArgv = argv.filter((arg, index) => {
-                if (arg === "--format") return false;
-                if (index > 0 && argv[index - 1] === "--format") return false;
-                if (arg.startsWith("--format=")) return false;
-                if (arg === "--json-only" || arg === "--json" || arg === "--json-output" || arg === "--pretty") return false;
-                return true;
-            });
-
-            const dLauncher = new Gio.SubprocessLauncher({
-                flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
-            });
-            dLauncher.set_environ(env);
-            const dProc = dLauncher.spawnv(discoveryArgv);
-
-            const [dStdout] = await new Promise((resolve) => {
-                dProc.communicate_utf8_async(null, cancellable, (p, res) => {
-                    try {
-                        const [ok, out] = p.communicate_utf8_finish(res);
-                        resolve([out || ""]);
-                    } catch (e) {
-                        resolve([""]);
-                    }
-                });
-            });
-
-            if (dStdout) {
-                const lines = dStdout.split("\n");
-                for (let line of lines) {
-                    const match = line.match(/^([^:]+):\s+\d+%/);
-                    if (match) {
-                        labels.push(match[1].trim());
-                    }
-                }
-            }
-        } catch (e) {
-            // Ignore label discovery failures
-        }
-
         if (trimmedStdout && (trimmedStdout.startsWith("[") || trimmedStdout.startsWith("{"))) {
             try {
                 const parsed = JSON.parse(trimmedStdout);
                 const rawData = Array.isArray(parsed) ? parsed[0] : parsed;
+                let labels = extractWindowLabels(rawData);
+                if (labels.length === 0) {
+                    labels = await this._discoverLabels(argv, env, cancellable);
+                }
                 return {
                     data: rawData,
                     labels: labels,
@@ -177,6 +142,43 @@ export class CliSubprocessFetcher extends UsageFetcher {
             throw new UsageApiError("Output is not valid JSON / La salida no es un JSON válido");
         } else {
             throw new UsageApiError("No output from command / Sin respuesta del comando");
+        }
+    }
+
+    /**
+     * Fallback for CLI versions whose JSON has no rateWindowLabels: run the
+     * text output once more and read the "Label: NN%" lines.
+     */
+    async _discoverLabels(argv, env, cancellable) {
+        try {
+            const discoveryArgv = argv.filter((arg, index) => {
+                if (arg === "--format") return false;
+                if (index > 0 && argv[index - 1] === "--format") return false;
+                if (arg.startsWith("--format=")) return false;
+                if (arg === "--json-only" || arg === "--json" || arg === "--json-output" || arg === "--pretty") return false;
+                return true;
+            });
+
+            const launcher = new Gio.SubprocessLauncher({
+                flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+            });
+            launcher.set_environ(env);
+            const proc = launcher.spawnv(discoveryArgv);
+
+            const [stdout] = await new Promise((resolve) => {
+                proc.communicate_utf8_async(null, cancellable, (p, res) => {
+                    try {
+                        const [ok, out] = p.communicate_utf8_finish(res);
+                        resolve([out || ""]);
+                    } catch (e) {
+                        resolve([""]);
+                    }
+                });
+            });
+
+            return parseTextWindowLabels(stdout);
+        } catch (e) {
+            return [];
         }
     }
 }
