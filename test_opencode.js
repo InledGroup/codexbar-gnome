@@ -1,8 +1,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
-const module = await import('./adapters/OpenCodeConsoleFetcher.js').catch(() => ({}));
-const {normalizeOpenCodeConsole: normalize, OpenCodeConsoleFetcher} = module;
+import {normalizeOpenCodeConsole as normalize, OpenCodeConsoleFetcher} from './adapters/OpenCodeConsoleFetcher.js';
 function assert(condition, message) {
     if (!condition) throw new Error(message);
 }

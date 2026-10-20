@@ -169,4 +169,3 @@ export const PREDEFINED_PROVIDERS = [
     defaultCommand: buildCliCommand(id, 'auto'),
   })),
 ];
-

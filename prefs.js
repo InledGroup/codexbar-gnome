@@ -964,7 +964,7 @@ const CodexBarPrefsPage = GObject.registerClass(
         const dialog = new Adw.MessageDialog({
           heading: _("Cookie Importer Missing"),
           body: _(
-            "To import cookies automatically from your browser, please install the python dependency by running:\n\npip install codexbar-cookie-importer",
+            "Install scripts/codexbar-cookie-importer from the CodexBar GNOME repository into ~/.local/bin and make it executable. It requires openssl, sqlite3, and secret-tool.",
           ),
           transient_for: this.get_root(),
           modal: true,
@@ -988,6 +988,10 @@ const CodexBarPrefsPage = GObject.registerClass(
         if (GLib.file_test(localBin, GLib.FileTest.EXISTS)) {
           argv = [localBin];
         } else {
+          if (providerId === "opencode" || providerId === "opencodego") {
+            showMissingDialog();
+            return;
+          }
           // Fall back to the python module entry point
           argv = ["/usr/bin/python3", "-m", "codexbar_cookie_importer"];
         }
