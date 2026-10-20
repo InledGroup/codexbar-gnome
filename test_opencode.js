@@ -2,10 +2,13 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
 import {normalizeOpenCodeConsole as normalize, OpenCodeConsoleFetcher} from './adapters/OpenCodeConsoleFetcher.js';
+import {UsageFetcher} from './core/ports/UsageFetcher.js';
+import {UsageApiError} from './usageApi.js';
 function assert(condition, message) {
     if (!condition) throw new Error(message);
 }
 assert(typeof normalize === 'function', 'OpenCode Console normalizer must exist');
+assert(new OpenCodeConsoleFetcher({}) instanceof UsageFetcher, 'Console adapter implements the shared UsageFetcher port');
 const now = Date.parse('2026-10-20T00:00:00Z');
 const goStatus = {access: {endsAt: '2026-11-20T00:00:00Z', meters: {
     fiveHour: {usedMicroCents: '25', limitMicroCents: '100'},
@@ -72,6 +75,8 @@ const fetched = await new OpenCodeConsoleFetcher(session).fetch(cookie, {provide
 assert(fetched.usage.primary.usedPercent === 25, 'fetch returns normalized meters');
 assert(session.calls[0].workspace === null && session.calls.slice(1).every(c => c.workspace === 'org_TEST'), 'workspace header scoped');
 assert(session.calls.every(c => c.cookie === cookie), 'session cookie forwarded');
+assert((await new OpenCodeConsoleFetcher(session).fetch(cookie, null)).usage.primary.usedPercent === 25,
+    'shared port accepts a null optional parameter');
 const paygSession = transport({[status]: {json: null}, '/console/api/orgs/current': {json: {hasGoSubscription: false}},
     [billing]: {json: billingStatus}, '/console/api/usage/summary?range=30d': {json: {totalCostMicroCents: '1234000000'}}});
 assert((await new OpenCodeConsoleFetcher(paygSession).fetch(cookie, {providerId: 'opencode', workspaceId: 'org_TEST'})).usage.providerCost.used === 12.34,
@@ -82,6 +87,7 @@ for (const code of [401, 403]) {
     let failure;
     try { await new OpenCodeConsoleFetcher(denied).fetch(cookie, {workspaceId: 'org_TEST'}); } catch (e) { failure = e; }
     assert(failure?.statusCode === code, `HTTP ${code} preserved`);
+    assert(failure instanceof UsageApiError, 'Console HTTP failures use the shared UsageApiError');
     assert(code !== 403 || !/sign in/i.test(failure.message), '403 not presented as signed out');
 }
 for (const reply of [{json: [{id: 'org_A'}, {id: 'org_B'}]}, {body: '<html>sign in</html>'}]) {

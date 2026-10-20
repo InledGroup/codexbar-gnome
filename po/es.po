@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: CodexBar\n"
 "Report-Msgid-Bugs-To: https://github.com/InledGroup/codexbar-gnome/issues\n"
-"POT-Creation-Date: 2026-10-20 14:47-0300\n"
+"POT-Creation-Date: 2026-10-20 15:48-0300\n"
 "PO-Revision-Date: 2026-10-18 14:52+0100\n"
 "Last-Translator: JaimeGH\n"
 "Language-Team: Spanish\n"
@@ -24,7 +24,7 @@ msgstr "CodexBar (actualizando...)"
 msgid "No token found in keyring"
 msgstr "No se encontró ningún token en el llavero"
 
-#: extension.js:453 adapters/OpenCodeConsoleFetcher.js:30
+#: extension.js:453 adapters/OpenCodeConsoleFetcher.js:26
 msgid "Weekly Window"
 msgstr "Ventana semanal"
 
@@ -637,47 +637,47 @@ msgstr "Caduca el %s"
 msgid " in %s"
 msgstr " en %s"
 
-#: adapters/OpenCodeConsoleFetcher.js:23
+#: adapters/OpenCodeConsoleFetcher.js:19
 msgid "Invalid OpenCode Console usage data."
 msgstr "Datos de uso de OpenCode Console inválidos."
 
-#: adapters/OpenCodeConsoleFetcher.js:30
+#: adapters/OpenCodeConsoleFetcher.js:26
 msgid "5-Hour Window"
 msgstr "Ventana de 5 horas"
 
-#: adapters/OpenCodeConsoleFetcher.js:30
+#: adapters/OpenCodeConsoleFetcher.js:26
 msgid "Monthly Window"
 msgstr "Ventana mensual"
 
-#: adapters/OpenCodeConsoleFetcher.js:60
+#: adapters/OpenCodeConsoleFetcher.js:56
 msgid "Last 30 days"
 msgstr "Últimos 30 días"
 
-#: adapters/OpenCodeConsoleFetcher.js:75
+#: adapters/OpenCodeConsoleFetcher.js:73
 msgid "Sign in to OpenCode Console and import its session cookies."
 msgstr "Inicia sesión en OpenCode Console e importa sus cookies de sesión."
 
-#: adapters/OpenCodeConsoleFetcher.js:78
+#: adapters/OpenCodeConsoleFetcher.js:76
 msgid "Enter a valid OpenCode workspace ID (org_… or wrk_…)."
 msgstr ""
 "Introduce un ID de espacio de trabajo de OpenCode válido (org_… o wrk_…)."
 
-#: adapters/OpenCodeConsoleFetcher.js:83
+#: adapters/OpenCodeConsoleFetcher.js:81
 msgid ""
 "Multiple OpenCode workspaces found. Set the workspace ID in Preferences."
 msgstr ""
 "Se encontraron varios espacios de trabajo de OpenCode. Configura su ID en "
 "Preferencias."
 
-#: adapters/OpenCodeConsoleFetcher.js:95
+#: adapters/OpenCodeConsoleFetcher.js:93
 msgid "OpenCode subscription usage is unavailable."
 msgstr "El uso de la suscripción de OpenCode no está disponible."
 
-#: adapters/OpenCodeConsoleFetcher.js:98
+#: adapters/OpenCodeConsoleFetcher.js:96
 msgid "This OpenCode billing mode is not supported."
 msgstr "Este modo de facturación de OpenCode no es compatible."
 
-#: adapters/OpenCodeConsoleFetcher.js:135
+#: adapters/OpenCodeConsoleFetcher.js:133
 msgid ""
 "OpenCode session expired. Sign in to OpenCode Console and import cookies "
 "again."
@@ -685,7 +685,7 @@ msgstr ""
 "La sesión de OpenCode caducó. Inicia sesión en OpenCode Console y vuelve a "
 "importar las cookies."
 
-#: adapters/OpenCodeConsoleFetcher.js:137
+#: adapters/OpenCodeConsoleFetcher.js:135
 #, javascript-format
 msgid "OpenCode Console request failed (HTTP %s)."
 msgstr "La solicitud a OpenCode Console falló (HTTP %s)."

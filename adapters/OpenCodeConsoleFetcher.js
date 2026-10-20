@@ -2,6 +2,8 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
 import {tr as _} from '../localize.js';
+import {UsageFetcher} from '../core/ports/UsageFetcher.js';
+import {UsageApiError} from '../usageApi.js';
 
 // Console contract documented by CodexBar v0.78.0, docs/opencode.md.
 // Micro-cents are integers; USD = micro-cents / 100,000,000.
@@ -12,15 +14,9 @@ function microCents(raw, signed = false) {
     return Number.isSafeInteger(value) ? value : null;
 }
 
-class ConsoleError extends Error {
-    constructor(message, statusCode = 0) {
-        super(message);
-        this.name = 'OpenCodeConsoleError';
-        this.statusCode = statusCode;
-    }
-}
+const consoleError = (message, statusCode = 0) => new UsageApiError(message, {statusCode});
 
-const invalidPayload = () => new ConsoleError(_('Invalid OpenCode Console usage data.'));
+const invalidPayload = () => consoleError(_('Invalid OpenCode Console usage data.'));
 const noSubscription = status => status === null || status?.access === null;
 
 /** Convert Console JSON into the extension's existing usage contract. */
@@ -63,24 +59,26 @@ export function normalizeOpenCodeConsole({providerId = 'opencodego', goStatus, b
 }
 
 /** Linux-compatible authenticated reads from the current OpenCode Console. */
-export class OpenCodeConsoleFetcher {
+export class OpenCodeConsoleFetcher extends UsageFetcher {
     constructor(session) {
+        super();
         this._session = session;
     }
 
-    async fetch(cookieHeader, {providerId = 'opencodego', workspaceId = '', cancellable = null} = {}) {
+    async fetch(cookieHeader, extraParams = null) {
+        let {providerId = 'opencodego', workspaceId = '', cancellable = null} = extraParams || {};
         this._checkCancelled(cancellable);
         // This integration uses the Console session, not legacy server-function cookies.
         if (!/(?:^|;\s*)__Host-console_session=[^;\s]+/.test(cookieHeader || '') || /[\r\n]/.test(cookieHeader))
-            throw new ConsoleError(_('Sign in to OpenCode Console and import its session cookies.'));
+            throw consoleError(_('Sign in to OpenCode Console and import its session cookies.'));
         workspaceId = workspaceId.trim();
         if (workspaceId && !/^(?:org|wrk)_[A-Za-z0-9_-]+$/.test(workspaceId))
-            throw new ConsoleError(_('Enter a valid OpenCode workspace ID (org_… or wrk_…).'));
+            throw consoleError(_('Enter a valid OpenCode workspace ID (org_… or wrk_…).'));
         if (!workspaceId) {
             const orgs = await this._get('/console/api/orgs', cookieHeader, null, cancellable);
             if (!Array.isArray(orgs) || !orgs.length) throw invalidPayload();
             if (orgs.length !== 1)
-                throw new ConsoleError(_('Multiple OpenCode workspaces found. Set the workspace ID in Preferences.'));
+                throw consoleError(_('Multiple OpenCode workspaces found. Set the workspace ID in Preferences.'));
             workspaceId = orgs[0]?.id;
             if (typeof workspaceId !== 'string' || !/^(?:org|wrk)_[A-Za-z0-9_-]+$/.test(workspaceId)) throw invalidPayload();
         }
@@ -92,10 +90,10 @@ export class OpenCodeConsoleFetcher {
         if (providerId === 'opencode' && noSubscription(goStatus)) {
             const org = await this._get('/console/api/orgs/current', cookieHeader, workspaceId, cancellable);
             if (org?.hasGoSubscription !== false)
-                throw new ConsoleError(_('OpenCode subscription usage is unavailable.'));
+                throw consoleError(_('OpenCode subscription usage is unavailable.'));
             billingStatus = await this._get('/console/api/billing/status', cookieHeader, workspaceId, cancellable);
             if (billingStatus?.mode !== 'pay-as-you-go')
-                throw new ConsoleError(_('This OpenCode billing mode is not supported.'));
+                throw consoleError(_('This OpenCode billing mode is not supported.'));
             usageSummary = await this._get('/console/api/usage/summary?range=30d', cookieHeader, workspaceId, cancellable);
         } else {
             try {
@@ -132,9 +130,9 @@ export class OpenCodeConsoleFetcher {
         this._checkCancelled(cancellable);
         const status = message.get_status();
         if (status === 401)
-            throw new ConsoleError(_('OpenCode session expired. Sign in to OpenCode Console and import cookies again.'), status);
+            throw consoleError(_('OpenCode session expired. Sign in to OpenCode Console and import cookies again.'), status);
         if (status !== 200)
-            throw new ConsoleError(_('OpenCode Console request failed (HTTP %s).').replace('%s', String(status)), status);
+            throw consoleError(_('OpenCode Console request failed (HTTP %s).').replace('%s', String(status)), status);
         try {
             return JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes.get_data()));
         } catch {
