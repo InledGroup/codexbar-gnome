@@ -83,6 +83,7 @@ export function adoptCustomProviders(providers, predefined) {
 
     claimed.add(match.id);
     return {
+      ...provider,
       id: match.id,
       name: match.name,
       command: provider.command,
@@ -91,3 +92,81 @@ export function adoptCustomProviders(providers, predefined) {
     };
   });
 }
+
+/**
+ * Predefined providers list.
+ * Lista de proveedores predefinidos.
+ *
+ * `supportsDirectApi` marks the providers this extension can query itself with
+ * a keyring cookie; the rest reach their source through codexbar-cli.
+ */
+export const PREDEFINED_PROVIDERS = [
+  {
+    id: "codex",
+    name: "Codex",
+    useApi: true,
+    supportsDirectApi: true,
+    defaultCommand: "",
+  },
+  {
+    id: "ollama",
+    name: "Ollama Cloud",
+    useApi: true,
+    supportsDirectApi: true,
+    defaultCommand: "",
+  },
+  {
+    id: "claude",
+    name: "Claude",
+    useApi: false,
+    defaultCommand: "codexbar --provider claude --source cli --format json",
+  },
+    {
+    id: "antigravity",
+    name: "Antigravity",
+    useApi: false,
+    defaultCommand:
+      "codexbar --provider antigravity --source cli --format json",
+  },
+  {
+    id: "gemini",
+    name: "Gemini CLI",
+    useApi: false,
+    defaultCommand: "codexbar --provider gemini --source api --format json",
+  },
+  {
+    id: "deepseek",
+    name: "DeepSeek",
+    useApi: false,
+    defaultCommand: "codexbar --provider deepseek --source api --format json",
+  },
+  {
+    id: "copilot",
+    name: "Copilot",
+    useApi: false,
+    defaultCommand: "codexbar --provider copilot --source api --format json",
+  },
+  {
+    id: "openrouter",
+    name: "OpenRouter",
+    useApi: false,
+    defaultCommand: "codexbar --provider openrouter --source api --format json",
+  },
+  {
+    id: "perplexity",
+    name: "Perplexity",
+    useApi: false,
+    defaultCommand: "codexbar --provider perplexity --source api --format json",
+  },
+  {
+    id: "mistral",
+    name: "Mistral",
+    useApi: false,
+    defaultCommand: "codexbar --provider mistral --source api --format json",
+  },
+  ...[['opencode', 'OpenCode'], ['opencodego', 'OpenCode Go']].map(([id, name]) => ({
+    id, name, useApi: true, supportsDirectApi: true,
+    defaultCommand: buildCliCommand(id, 'auto'),
+  })),
+];
+

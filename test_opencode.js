@@ -104,3 +104,22 @@ try { await new OpenCodeConsoleFetcher(cancelled).fetch(cookie, {cancellable: ca
 assert(cancellation?.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED), 'cancellation propagated before request');
 assert(cancelled.calls.length === 0, 'cancelled request does not start');
 console.log('✓ OpenCode Console quota, money, workspace, transport and cancellation tests');
+
+const {PREDEFINED_PROVIDERS, adoptCustomProviders, buildCliCommand, parseGeneratedCommand} = await import('./providerSources.js');
+assert(Array.isArray(PREDEFINED_PROVIDERS), 'predefined catalog is available for testing');
+for (const [id, name] of [['opencode', 'OpenCode'], ['opencodego', 'OpenCode Go']]) {
+    const entry = PREDEFINED_PROVIDERS.find(p => p.id === id);
+    assert(entry?.name === name && entry.useApi && entry.supportsDirectApi, `${id} is selectable with Direct API`);
+    assert(parseGeneratedCommand(entry.defaultCommand)?.cliId === id, 'CLI default uses canonical ID');
+    const migrated = adoptCustomProviders([{id: 'custom-1', name, command: buildCliCommand(id, 'auto'), showInPanel: true}], PREDEFINED_PROVIDERS);
+    assert(migrated[0].id === id && migrated[0].showInPanel === true, 'migration preserves panel selection');
+    const custom = [{id: 'custom-2', name: name + ' work', command: buildCliCommand(id, 'auto') + ' --account work'}];
+    assert(adoptCustomProviders(custom, PREDEFINED_PROVIDERS)[0].id === 'custom-2', 'account-specific command remains custom');
+    assert(adoptCustomProviders([{id, name}, ...custom], PREDEFINED_PROVIDERS)[1].id === 'custom-2', 'deliberate duplicate remains custom');
+}
+const {formatPanelText} = await import('./localize.js');
+assert(formatPanelText({balanceUSD: 0}, 'remaining') === '$0.00', 'balance-only zero panel');
+assert(formatPanelText({balanceUSD: -1}, 'remaining') === '$-1.00', 'balance-only signed panel');
+assert(formatPanelText({balanceUSD: 73.63, providerCost: {used: 12.34, currencyCode: 'USD'}}, 'used') === '$12.34', 'PAYG panel shows labeled spend in used mode');
+assert(formatPanelText({balanceUSD: 73.63, providerCost: {used: 12.34, currencyCode: 'USD'}}, 'remaining') === '$73.63', 'PAYG remaining mode shows balance');
+console.log('✓ OpenCode catalog, migration and balance panel tests');

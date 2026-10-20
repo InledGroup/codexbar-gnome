@@ -18,6 +18,7 @@ import {
   buildCliCommand,
   CLI_SOURCES,
   DIRECT_API,
+  PREDEFINED_PROVIDERS,
   parseGeneratedCommand,
 } from "./providerSources.js";
 
@@ -39,78 +40,6 @@ const sourceLabel = (source) =>
     api: _("Provider API (via CLI)"),
   })[source] || source;
 
-/**
- * Predefined providers list.
- * Lista de proveedores predefinidos.
- *
- * `supportsDirectApi` marks the providers this extension can query itself with
- * a keyring cookie; the rest reach their source through codexbar-cli.
- */
-const PREDEFINED_PROVIDERS = [
-  {
-    id: "codex",
-    name: "Codex",
-    useApi: true,
-    supportsDirectApi: true,
-    defaultCommand: "",
-  },
-  {
-    id: "ollama",
-    name: "Ollama Cloud",
-    useApi: true,
-    supportsDirectApi: true,
-    defaultCommand: "",
-  },
-  {
-    id: "claude",
-    name: "Claude",
-    useApi: false,
-    defaultCommand: "codexbar --provider claude --source cli --format json",
-  },
-    {
-    id: "antigravity",
-    name: "Antigravity",
-    useApi: false,
-    defaultCommand:
-      "codexbar --provider antigravity --source cli --format json",
-  },
-  {
-    id: "gemini",
-    name: "Gemini CLI",
-    useApi: false,
-    defaultCommand: "codexbar --provider gemini --source api --format json",
-  },
-  {
-    id: "deepseek",
-    name: "DeepSeek",
-    useApi: false,
-    defaultCommand: "codexbar --provider deepseek --source api --format json",
-  },
-  {
-    id: "copilot",
-    name: "Copilot",
-    useApi: false,
-    defaultCommand: "codexbar --provider copilot --source api --format json",
-  },
-  {
-    id: "openrouter",
-    name: "OpenRouter",
-    useApi: false,
-    defaultCommand: "codexbar --provider openrouter --source api --format json",
-  },
-  {
-    id: "perplexity",
-    name: "Perplexity",
-    useApi: false,
-    defaultCommand: "codexbar --provider perplexity --source api --format json",
-  },
-  {
-    id: "mistral",
-    name: "Mistral",
-    useApi: false,
-    defaultCommand: "codexbar --provider mistral --source api --format json",
-  },
-];
 
 /**
  * Preferences page for CodexBar.
@@ -542,6 +471,8 @@ const CodexBarPrefsPage = GObject.registerClass(
               useApi: row._useApi,
               ...(row._source ? { source: row._source } : {}),
               ...(row._panelCheck.active ? { showInPanel: true } : {}),
+              ...(row._workspaceEntry?.get_text().trim()
+                ? { workspaceId: row._workspaceEntry.get_text().trim() } : {}),
             });
 
             if (row._useApi) {
@@ -582,6 +513,7 @@ const CodexBarPrefsPage = GObject.registerClass(
 
         row._id = activeData ? activeData.id : info.id;
         row._name = info.name;
+        const isOpenCode = info.id === "opencode" || info.id === "opencodego";
 
         // Which sources this row offers, and which one it starts on. Only
         // predefined rows get a selector - a custom provider's command is
@@ -695,7 +627,7 @@ const CodexBarPrefsPage = GObject.registerClass(
           // For Direct API providers like Codex
           // For direct API providers like Codex
           const tokenEntry = new Gtk.PasswordEntry({
-            placeholder_text: _(
+            placeholder_text: isOpenCode ? _("__Host-console_session=…") : _(
               "Authentication Cookie (starts with __Secure...)",
             ),
           });
@@ -713,7 +645,7 @@ const CodexBarPrefsPage = GObject.registerClass(
             label: _("Auto-Login from Browser"),
             margin_top: 6,
             tooltip_text: _(
-              "Uses a local Python script to extract cookies from Chrome/Brave for this provider.",
+              "Extract session cookies from Chrome, Brave, or Edge for this provider.",
             ),
           });
 
@@ -743,6 +675,22 @@ const CodexBarPrefsPage = GObject.registerClass(
           );
           apiBox.append(tokenEntry);
           apiBox.append(btnBox);
+          if (isOpenCode) {
+            const workspaceEntry = new Gtk.Entry({
+              placeholder_text: _("Workspace ID (org_… or wrk_…; optional for a single workspace)"),
+              text: activeData?.workspaceId || "",
+              hexpand: true,
+            });
+            row._workspaceEntry = workspaceEntry;
+            workspaceEntry.connect("changed", saveProviders);
+            apiBox.append(workspaceEntry);
+            apiBox.append(new Gtk.Label({
+              label: _("Sign in at opencode.ai/console, then import cookies. With multiple workspaces, copy the workspace ID from the Console URL."),
+              wrap: true,
+              xalign: 0,
+              css_classes: ["dim-label"],
+            }));
+          }
           apiBox.append(
             new Gtk.Label({
               label: _("Manual entry: Paste your session cookies here."),
@@ -1045,9 +993,7 @@ const CodexBarPrefsPage = GObject.registerClass(
         }
       }
 
-      if (providerId === "ollama") {
-        argv.push("--provider", "ollama");
-      }
+      argv.push("--provider", providerId);
 
       try {
         const proc = new Gio.Subprocess({
