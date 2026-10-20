@@ -93,6 +93,25 @@ export function adoptCustomProviders(providers, predefined) {
   });
 }
 
+/** Resolve preference rows without changing their stored configuration. */
+export function resolveProviderRows(providers, predefined) {
+  const ids = new Set();
+  const rows = predefined.map(info => {
+    const activeData = providers.find(p => p.id === info.id) || null;
+    if (activeData) {
+      ids.add(activeData.id);
+    }
+    return {info, activeData};
+  });
+  for (const provider of providers) {
+    if (!ids.has(provider.id)) {
+      rows.push({info: {id: provider.id, name: provider.name,
+        useApi: provider.useApi || false, defaultCommand: provider.command}, activeData: provider});
+    }
+  }
+  return rows;
+}
+
 /**
  * Predefined providers list.
  * Lista de proveedores predefinidos.

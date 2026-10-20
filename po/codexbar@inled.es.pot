@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: CodexBar\n"
 "Report-Msgid-Bugs-To: https://github.com/InledGroup/codexbar-gnome/issues\n"
-"POT-Creation-Date: 2026-10-20 14:44-0300\n"
+"POT-Creation-Date: 2026-10-20 14:47-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -220,243 +220,243 @@ msgstr ""
 msgid "Get Started!"
 msgstr ""
 
-#: prefs.js:33
+#: prefs.js:34
 msgid "Direct API (session cookies)"
 msgstr ""
 
-#: prefs.js:34
+#: prefs.js:35
 msgid "Auto"
 msgstr ""
 
-#: prefs.js:35
+#: prefs.js:36
 msgid "Web dashboard"
 msgstr ""
 
-#: prefs.js:36
+#: prefs.js:37
 msgid "Local CLI"
 msgstr ""
 
-#: prefs.js:37
+#: prefs.js:38
 msgid "OAuth"
 msgstr ""
 
-#: prefs.js:40
+#: prefs.js:41
 msgid "Provider API (via CLI)"
 msgstr ""
 
-#: prefs.js:51
+#: prefs.js:52
 msgid "General"
 msgstr ""
 
-#: prefs.js:76
+#: prefs.js:77
 msgid "Developer & Testing Options"
 msgstr ""
 
-#: prefs.js:78
+#: prefs.js:79
 msgid "Simulate custom CLI outputs and view debug logs."
 msgstr ""
 
-#: prefs.js:83
+#: prefs.js:84
 msgid "Test with Custom CLI Output"
 msgstr ""
 
-#: prefs.js:85
+#: prefs.js:86
 msgid ""
 "Simulate Codexbar-CLI outputs to test providers or other things and see how "
 "the extension renders the data"
 msgstr ""
 
-#: prefs.js:98
+#: prefs.js:99
 msgid "Simulated Provider Name"
 msgstr ""
 
-#: prefs.js:110
+#: prefs.js:111
 msgid "Codexbar-CLI custom output"
 msgstr ""
 
-#: prefs.js:111
+#: prefs.js:112
 msgid "Paste the raw JSON output to test"
 msgstr ""
 
-#: prefs.js:161
+#: prefs.js:162
 msgid "Contribute & Contact"
 msgstr ""
 
-#: prefs.js:163
+#: prefs.js:164
 msgid ""
 "Enjoy the community of Codexbar contributors and other Inled projects. We "
 "are waiting for you!"
 msgstr ""
 
-#: prefs.js:168
+#: prefs.js:169
 msgid "Add a New Provider"
 msgstr ""
 
-#: prefs.js:170
+#: prefs.js:171
 msgid "Help the community by submitting a Pull Request on GitHub"
 msgstr ""
 
-#: prefs.js:190
+#: prefs.js:191
 msgid "Leave a Review"
 msgstr ""
 
-#: prefs.js:192
+#: prefs.js:193
 msgid "Rate the extension on EGO or share on social media."
 msgstr ""
 
-#: prefs.js:212
+#: prefs.js:213
 msgid "Contact Inled"
 msgstr ""
 
-#: prefs.js:213
+#: prefs.js:214
 msgid "Questions? Suggestions? Write to us at hi@inled.es"
 msgstr ""
 
-#: prefs.js:231
+#: prefs.js:232
 msgid "Visit inled.es"
 msgstr ""
 
-#: prefs.js:233
+#: prefs.js:234
 msgid "Discover more tools and projects that might interest you!"
 msgstr ""
 
-#: prefs.js:250
+#: prefs.js:251
 msgid "Join the Community"
 msgstr ""
 
-#: prefs.js:251
+#: prefs.js:252
 msgid "¡We have new Discord and Matrix channels!"
 msgstr ""
 
-#: prefs.js:330
+#: prefs.js:331
 msgid "Settings"
 msgstr ""
 
-#: prefs.js:334
+#: prefs.js:335
 msgid "Refresh Interval (minutes)"
 msgstr ""
 
-#: prefs.js:351
+#: prefs.js:352
 msgid "Display Mode"
 msgstr ""
 
-#: prefs.js:353
+#: prefs.js:354
 msgid "Used"
 msgstr ""
 
-#: prefs.js:353
+#: prefs.js:354
 msgid "Remaining"
 msgstr ""
 
-#: prefs.js:366
+#: prefs.js:367
 msgid "Language"
 msgstr ""
 
-#: prefs.js:383
+#: prefs.js:384
 msgid "Show Provider Logos"
 msgstr ""
 
-#: prefs.js:385
+#: prefs.js:386
 msgid "Display the logo of each AI provider in the selection tabs"
 msgstr ""
 
-#: prefs.js:398
+#: prefs.js:399
 msgid "Show Usage Pacing"
 msgstr ""
 
-#: prefs.js:400
+#: prefs.js:401
 msgid ""
 "Display weekly pacing estimates (reserve or over pace) for large windows"
 msgstr ""
 
-#: prefs.js:413
+#: prefs.js:414
 msgid "Show Provider Details"
 msgstr ""
 
-#: prefs.js:415
+#: prefs.js:416
 msgid ""
 "Display the extra detail sections reported by the provider CLI (credits, "
 "spend history, rate limits)"
 msgstr ""
 
-#: prefs.js:436
+#: prefs.js:437
 msgid "AI Providers"
 msgstr ""
 
-#: prefs.js:438
+#: prefs.js:439
 msgid ""
 "Enable providers and pick how each one connects. Direct API uses session "
 "cookies from your keyring; the other choices run codexbar-cli with that --"
 "source. Antigravity also needs the plugin."
 msgstr ""
 
-#: prefs.js:510 prefs.js:549
+#: prefs.js:511 prefs.js:550
 msgid "Enabled"
 msgstr ""
 
-#: prefs.js:510 prefs.js:549
+#: prefs.js:511 prefs.js:550
 msgid "Disabled"
 msgstr ""
 
-#: prefs.js:566
+#: prefs.js:567
 msgid "Show in panel"
 msgstr ""
 
-#: prefs.js:568
+#: prefs.js:569
 msgid "Show this provider's usage windows as text in the top bar"
 msgstr ""
 
-#: prefs.js:597
+#: prefs.js:598
 msgid "Connection:"
 msgstr ""
 
-#: prefs.js:630
+#: prefs.js:631
 msgid "__Host-console_session=…"
 msgstr ""
 
-#: prefs.js:631
+#: prefs.js:632
 msgid "Authentication Cookie (starts with __Secure...)"
 msgstr ""
 
-#: prefs.js:645
+#: prefs.js:646
 msgid "Auto-Login from Browser"
 msgstr ""
 
-#: prefs.js:648
+#: prefs.js:649
 msgid "Extract session cookies from Chrome, Brave, or Edge for this provider."
 msgstr ""
 
-#: prefs.js:671
+#: prefs.js:672
 msgid "Session Cookies:"
 msgstr ""
 
-#: prefs.js:680
+#: prefs.js:681
 msgid "Workspace ID (org_… or wrk_…; optional for a single workspace)"
 msgstr ""
 
-#: prefs.js:688
+#: prefs.js:689
 msgid ""
 "Sign in at opencode.ai/console, then import cookies. With multiple "
 "workspaces, copy the workspace ID from the Console URL."
 msgstr ""
 
-#: prefs.js:696
+#: prefs.js:697
 msgid "Manual entry: Paste your session cookies here."
 msgstr ""
 
-#: prefs.js:709
+#: prefs.js:710
 msgid "CLI Command (e.g. codexbar --provider ...)"
 msgstr ""
 
-#: prefs.js:717
+#: prefs.js:718
 msgid "CLI Command:"
 msgstr ""
 
-#: prefs.js:722
+#: prefs.js:723
 msgid "Reset Default"
 msgstr ""
 
-#: prefs.js:766
+#: prefs.js:767
 msgid ""
 "💡 Antigravity requires a trusted local SSL certificate to work. So we have "
 "made a python script to help you do this in a single command:\n"
@@ -464,96 +464,96 @@ msgid ""
 "pip install codexbar-ssl-helper && codexbar-ssl-helper"
 msgstr ""
 
-#: prefs.js:786
+#: prefs.js:787
 msgid "Remove Provider"
 msgstr ""
 
-#: prefs.js:837
+#: prefs.js:809
 msgid "Add Custom Provider"
 msgstr ""
 
-#: prefs.js:838
+#: prefs.js:810
 msgid "The extension should parse it correctly."
 msgstr ""
 
-#: prefs.js:849
+#: prefs.js:821
 msgid "New Provider"
 msgstr ""
 
-#: prefs.js:850
+#: prefs.js:822
 msgid "Enter the details for your custom AI provider."
 msgstr ""
 
-#: prefs.js:861
+#: prefs.js:833
 msgid "Provider Name (e.g. MyLocalModel)"
 msgstr ""
 
-#: prefs.js:866
+#: prefs.js:838
 msgid "Command (e.g. codexbar --provider ...)"
 msgstr ""
 
-#: prefs.js:871
+#: prefs.js:843
 msgid "Cancel"
 msgstr ""
 
-#: prefs.js:872
+#: prefs.js:844
 msgid "Add"
 msgstr ""
 
-#: prefs.js:918
+#: prefs.js:890
 msgid "Maintenance"
 msgstr ""
 
-#: prefs.js:922
+#: prefs.js:894
 msgid "Show Welcome Screen"
 msgstr ""
 
-#: prefs.js:923
+#: prefs.js:895
 msgid "Reset first-run state"
 msgstr ""
 
-#: prefs.js:958 prefs.js:972
+#: prefs.js:930 prefs.js:944
 msgid "OK"
 msgstr ""
 
-#: prefs.js:965
+#: prefs.js:937
 msgid "Cookie Importer Missing"
 msgstr ""
 
-#: prefs.js:967
+#: prefs.js:939
 msgid ""
 "Install scripts/codexbar-cookie-importer from the CodexBar GNOME repository "
 "into ~/.local/bin and make it executable. It requires openssl, sqlite3, and "
 "secret-tool."
 msgstr ""
 
-#: prefs.js:1018
+#: prefs.js:990
 msgid "Timeout"
 msgstr ""
 
-#: prefs.js:1020
+#: prefs.js:992
 msgid ""
 "The cookie importer is taking too long. Please ensure your browser is closed "
 "and try again."
 msgstr ""
 
-#: prefs.js:1054
+#: prefs.js:1026
 msgid "Import Failed"
 msgstr ""
 
-#: prefs.js:1060
+#: prefs.js:1032
 msgid "Cookies imported successfully!"
 msgstr ""
 
-#: prefs.js:1066
+#: prefs.js:1038
 msgid "The importer returned no data."
 msgstr ""
 
-#: prefs.js:1070
+#: prefs.js:1042
 msgid "Error"
 msgstr ""
 
-#: prefs.js:1080
+#: prefs.js:1052
 msgid "Unexpected Error"
 msgstr ""
 

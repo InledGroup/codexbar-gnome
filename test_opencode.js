@@ -122,3 +122,17 @@ assert(formatPanelText({balanceUSD: -1}, 'remaining') === '$-1.00', 'balance-onl
 assert(formatPanelText({balanceUSD: 73.63, providerCost: {used: 12.34, currencyCode: 'USD'}}, 'used') === '$12.34', 'PAYG panel shows labeled spend in used mode');
 assert(formatPanelText({balanceUSD: 73.63, providerCost: {used: 12.34, currencyCode: 'USD'}}, 'remaining') === '$73.63', 'PAYG remaining mode shows balance');
 console.log('✓ OpenCode catalog, migration and balance panel tests');
+
+const {resolveProviderRows} = await import('./providerSources.js');
+assert(typeof resolveProviderRows === 'function', 'provider row matching is testable');
+for (const id of ['opencode', 'opencodego']) {
+    const name = id === 'opencode' ? 'OpenCode' : 'OpenCode Go';
+    const explicit = {id: 'custom-work', name, command: buildCliCommand(id, 'auto') + ' --account work', useApi: false};
+    const rows = resolveProviderRows([explicit], PREDEFINED_PROVIDERS);
+    assert(rows.find(r => r.info.id === id).activeData === null, 'exact-name custom command does not activate predefined row');
+    assert(rows.find(r => r.info.id === explicit.id).activeData === explicit, 'custom account remains a custom row');
+    const configurations = adoptCustomProviders([{id: 'custom-first', name, command: buildCliCommand(id, 'auto')}, explicit], PREDEFINED_PROVIDERS);
+    const duplicates = resolveProviderRows(configurations, PREDEFINED_PROVIDERS).filter(r => r.activeData);
+    assert(duplicates.length === 2 && duplicates.some(r => r.info.id === explicit.id), 'same-name accounts both survive rendering and save');
+}
+console.log('✓ OpenCode preferences preserve custom account commands and duplicate names');

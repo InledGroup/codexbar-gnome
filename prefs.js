@@ -19,6 +19,7 @@ import {
   CLI_SOURCES,
   DIRECT_API,
   PREDEFINED_PROVIDERS,
+  resolveProviderRows,
   parseGeneratedCommand,
 } from "./providerSources.js";
 
@@ -800,37 +801,8 @@ const CodexBarPrefsPage = GObject.registerClass(
         return row;
       };
 
-      const processedIds = new Set();
-      const processedNames = new Set();
-
-      PREDEFINED_PROVIDERS.forEach((info) => {
-        const infoNameLower = info.name.toLowerCase();
-        const activeData =
-          activeProviders.find((p) => p.id === info.id) ||
-          activeProviders.find((p) => p.name.toLowerCase() === infoNameLower);
-
-        if (activeData) {
-          processedIds.add(activeData.id);
-          processedNames.add(activeData.name.toLowerCase());
-        }
+      resolveProviderRows(activeProviders, PREDEFINED_PROVIDERS).forEach(({info, activeData}) => {
         group.add(createProviderRow(info, activeData));
-      });
-
-      activeProviders.forEach((p) => {
-        const pNameLower = p.name.toLowerCase();
-        if (!processedIds.has(p.id) && !processedNames.has(pNameLower)) {
-          group.add(
-            createProviderRow(
-              {
-                id: p.id,
-                name: p.name,
-                useApi: p.useApi || false,
-                defaultCommand: p.command,
-              },
-              p,
-            ),
-          );
-        }
       });
 
       const addBtnRow = new Adw.ActionRow({

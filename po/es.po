@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: CodexBar\n"
 "Report-Msgid-Bugs-To: https://github.com/InledGroup/codexbar-gnome/issues\n"
-"POT-Creation-Date: 2026-10-20 14:44-0300\n"
+"POT-Creation-Date: 2026-10-20 14:47-0300\n"
 "PO-Revision-Date: 2026-10-18 14:52+0100\n"
 "Last-Translator: JaimeGH\n"
 "Language-Team: Spanish\n"
@@ -143,7 +143,8 @@ msgstr "Saldo Zen"
 
 #: extension.js:1071
 msgid "No active OpenCode Go subscription in this workspace."
-msgstr "No hay una suscripción activa de OpenCode Go en este espacio de trabajo."
+msgstr ""
+"No hay una suscripción activa de OpenCode Go en este espacio de trabajo."
 
 #: extension.js:1299 extension.js:1306
 msgid "Copy"
@@ -221,49 +222,49 @@ msgstr ""
 msgid "Get Started!"
 msgstr "¡Empezar!"
 
-#: prefs.js:33
+#: prefs.js:34
 msgid "Direct API (session cookies)"
 msgstr "API directa (cookies de sesión)"
 
-#: prefs.js:34
+#: prefs.js:35
 msgid "Auto"
 msgstr "Automático"
 
-#: prefs.js:35
+#: prefs.js:36
 msgid "Web dashboard"
 msgstr "Panel web"
 
-#: prefs.js:36
+#: prefs.js:37
 msgid "Local CLI"
 msgstr "CLI local"
 
-#: prefs.js:37
+#: prefs.js:38
 msgid "OAuth"
 msgstr "OAuth"
 
-#: prefs.js:40
+#: prefs.js:41
 msgid "Provider API (via CLI)"
 msgstr "API del proveedor (vía CLI)"
 
-#: prefs.js:51
+#: prefs.js:52
 msgid "General"
 msgstr "General"
 
-#: prefs.js:76
+#: prefs.js:77
 msgid "Developer & Testing Options"
 msgstr "Opciones de desarrollo y pruebas"
 
-#: prefs.js:78
+#: prefs.js:79
 msgid "Simulate custom CLI outputs and view debug logs."
 msgstr ""
 "Simula salidas personalizadas de la CLI y consulta los registros de "
 "depuración."
 
-#: prefs.js:83
+#: prefs.js:84
 msgid "Test with Custom CLI Output"
 msgstr "Probar con salida personalizada de la CLI"
 
-#: prefs.js:85
+#: prefs.js:86
 msgid ""
 "Simulate Codexbar-CLI outputs to test providers or other things and see how "
 "the extension renders the data"
@@ -271,23 +272,23 @@ msgstr ""
 "Simula salidas de codexbar-cli para probar proveedores u otras cosas y ver "
 "cómo la extensión muestra los datos"
 
-#: prefs.js:98
+#: prefs.js:99
 msgid "Simulated Provider Name"
 msgstr "Nombre del proveedor simulado"
 
-#: prefs.js:110
+#: prefs.js:111
 msgid "Codexbar-CLI custom output"
 msgstr "Salida personalizada de codexbar-cli"
 
-#: prefs.js:111
+#: prefs.js:112
 msgid "Paste the raw JSON output to test"
 msgstr "Pega la salida JSON en bruto para probar"
 
-#: prefs.js:161
+#: prefs.js:162
 msgid "Contribute & Contact"
 msgstr "Contribuir y contacto"
 
-#: prefs.js:163
+#: prefs.js:164
 msgid ""
 "Enjoy the community of Codexbar contributors and other Inled projects. We "
 "are waiting for you!"
@@ -295,95 +296,95 @@ msgstr ""
 "Disfruta de la comunidad de colaboradores de CodexBar y de otros proyectos "
 "de Inled. ¡Te esperamos!"
 
-#: prefs.js:168
+#: prefs.js:169
 msgid "Add a New Provider"
 msgstr "Añadir un nuevo proveedor"
 
-#: prefs.js:170
+#: prefs.js:171
 msgid "Help the community by submitting a Pull Request on GitHub"
 msgstr "Ayuda a la comunidad enviando un Pull Request en GitHub"
 
-#: prefs.js:190
+#: prefs.js:191
 msgid "Leave a Review"
 msgstr "Deja una reseña"
 
-#: prefs.js:192
+#: prefs.js:193
 msgid "Rate the extension on EGO or share on social media."
 msgstr "Valora la extensión en EGO o compártela en redes sociales."
 
-#: prefs.js:212
+#: prefs.js:213
 msgid "Contact Inled"
 msgstr "Contacta con Inled"
 
-#: prefs.js:213
+#: prefs.js:214
 msgid "Questions? Suggestions? Write to us at hi@inled.es"
 msgstr "¿Preguntas? ¿Sugerencias? Escríbenos a hi@inled.es"
 
-#: prefs.js:231
+#: prefs.js:232
 msgid "Visit inled.es"
 msgstr "Visita inled.es"
 
-#: prefs.js:233
+#: prefs.js:234
 msgid "Discover more tools and projects that might interest you!"
 msgstr "Descubre más herramientas y proyectos que pueden interesarte."
 
-#: prefs.js:250
+#: prefs.js:251
 msgid "Join the Community"
 msgstr "Únete a la comunidad"
 
-#: prefs.js:251
+#: prefs.js:252
 msgid "¡We have new Discord and Matrix channels!"
 msgstr "¡Tenemos nuevos canales en Discord y Matrix!"
 
-#: prefs.js:330
+#: prefs.js:331
 msgid "Settings"
 msgstr "Ajustes"
 
-#: prefs.js:334
+#: prefs.js:335
 msgid "Refresh Interval (minutes)"
 msgstr "Intervalo de actualización (minutos)"
 
-#: prefs.js:351
+#: prefs.js:352
 msgid "Display Mode"
 msgstr "Modo de visualización"
 
-#: prefs.js:353
+#: prefs.js:354
 msgid "Used"
 msgstr "Usado"
 
-#: prefs.js:353
+#: prefs.js:354
 msgid "Remaining"
 msgstr "Restante"
 
-#: prefs.js:366
+#: prefs.js:367
 msgid "Language"
 msgstr "Idioma"
 
-#: prefs.js:383
+#: prefs.js:384
 msgid "Show Provider Logos"
 msgstr "Mostrar logotipos de los proveedores"
 
-#: prefs.js:385
+#: prefs.js:386
 msgid "Display the logo of each AI provider in the selection tabs"
 msgstr ""
 "Muestra el logotipo de cada proveedor de IA en las pestañas de selección"
 
-#: prefs.js:398
+#: prefs.js:399
 msgid "Show Usage Pacing"
 msgstr "Mostrar ritmo de uso"
 
-#: prefs.js:400
+#: prefs.js:401
 msgid ""
 "Display weekly pacing estimates (reserve or over pace) for large windows"
 msgstr ""
 "Muestra estimaciones del ritmo semanal (de reserva o por encima del ritmo) "
 "para las ventanas largas"
 
-#: prefs.js:413
+#: prefs.js:414
 msgid "Show Provider Details"
 msgstr "Mostrar detalles del proveedor"
 
-#: prefs.js:415
+#: prefs.js:416
 msgid ""
 "Display the extra detail sections reported by the provider CLI (credits, "
 "spend history, rate limits)"
@@ -391,11 +392,11 @@ msgstr ""
 "Muestra las secciones de detalles extra que informa la CLI del proveedor "
 "(créditos, historial de gastos, límites de tasa)"
 
-#: prefs.js:436
+#: prefs.js:437
 msgid "AI Providers"
 msgstr "Proveedores de IA"
 
-#: prefs.js:438
+#: prefs.js:439
 msgid ""
 "Enable providers and pick how each one connects. Direct API uses session "
 "cookies from your keyring; the other choices run codexbar-cli with that --"
@@ -405,74 +406,77 @@ msgstr ""
 "cookies de sesión de tu llavero; las demás opciones ejecutan codexbar-cli "
 "con ese --source. Antigravity también necesita el plugin."
 
-#: prefs.js:510 prefs.js:549
+#: prefs.js:511 prefs.js:550
 msgid "Enabled"
 msgstr "Activado"
 
-#: prefs.js:510 prefs.js:549
+#: prefs.js:511 prefs.js:550
 msgid "Disabled"
 msgstr "Desactivado"
 
-#: prefs.js:566
+#: prefs.js:567
 msgid "Show in panel"
 msgstr "Mostrar en el panel"
 
-#: prefs.js:568
+#: prefs.js:569
 msgid "Show this provider's usage windows as text in the top bar"
 msgstr ""
 "Muestra las ventanas de uso de este proveedor como texto en la barra superior"
 
-#: prefs.js:597
+#: prefs.js:598
 msgid "Connection:"
 msgstr "Conexión:"
 
-#: prefs.js:630
+#: prefs.js:631
 msgid "__Host-console_session=…"
 msgstr "__Host-console_session=…"
 
-#: prefs.js:631
+#: prefs.js:632
 msgid "Authentication Cookie (starts with __Secure...)"
 msgstr "Cookie de autenticación (empieza por __Secure...)"
 
-#: prefs.js:645
+#: prefs.js:646
 msgid "Auto-Login from Browser"
 msgstr "Inicio de sesión automático desde el navegador"
 
-#: prefs.js:648
+#: prefs.js:649
 msgid "Extract session cookies from Chrome, Brave, or Edge for this provider."
-msgstr "Extrae las cookies de sesión de Chrome, Brave o Edge para este proveedor."
+msgstr ""
+"Extrae las cookies de sesión de Chrome, Brave o Edge para este proveedor."
 
-#: prefs.js:671
+#: prefs.js:672
 msgid "Session Cookies:"
 msgstr "Cookies de sesión:"
 
-#: prefs.js:680
+#: prefs.js:681
 msgid "Workspace ID (org_… or wrk_…; optional for a single workspace)"
 msgstr "ID del espacio de trabajo (org_… o wrk_…; opcional si solo hay uno)"
 
-#: prefs.js:688
+#: prefs.js:689
 msgid ""
 "Sign in at opencode.ai/console, then import cookies. With multiple "
 "workspaces, copy the workspace ID from the Console URL."
-msgstr "Inicia sesión en opencode.ai/console e importa las cookies. Si tienes varios espacios de trabajo, copia su ID de la URL de la consola."
+msgstr ""
+"Inicia sesión en opencode.ai/console e importa las cookies. Si tienes varios "
+"espacios de trabajo, copia su ID de la URL de la consola."
 
-#: prefs.js:696
+#: prefs.js:697
 msgid "Manual entry: Paste your session cookies here."
 msgstr "Entrada manual: pega aquí tus cookies de sesión."
 
-#: prefs.js:709
+#: prefs.js:710
 msgid "CLI Command (e.g. codexbar --provider ...)"
 msgstr "Comando de la CLI (p. ej. codexbar --provider ...)"
 
-#: prefs.js:717
+#: prefs.js:718
 msgid "CLI Command:"
 msgstr "Comando de la CLI:"
 
-#: prefs.js:722
+#: prefs.js:723
 msgid "Reset Default"
 msgstr "Restablecer por defecto"
 
-#: prefs.js:766
+#: prefs.js:767
 msgid ""
 "💡 Antigravity requires a trusted local SSL certificate to work. So we have "
 "made a python script to help you do this in a single command:\n"
@@ -484,74 +488,77 @@ msgstr ""
 "con un único comando:\\n\\npip install codexbar-ssl-helper && codexbar-ssl-"
 "helper"
 
-#: prefs.js:786
+#: prefs.js:787
 msgid "Remove Provider"
 msgstr "Eliminar proveedor"
 
-#: prefs.js:837
+#: prefs.js:809
 msgid "Add Custom Provider"
 msgstr "Añadir proveedor personalizado"
 
-#: prefs.js:838
+#: prefs.js:810
 msgid "The extension should parse it correctly."
 msgstr "La extensión debería analizarlo correctamente."
 
-#: prefs.js:849
+#: prefs.js:821
 msgid "New Provider"
 msgstr "Nuevo proveedor"
 
-#: prefs.js:850
+#: prefs.js:822
 msgid "Enter the details for your custom AI provider."
 msgstr "Introduce los datos de tu proveedor de IA personalizado."
 
-#: prefs.js:861
+#: prefs.js:833
 msgid "Provider Name (e.g. MyLocalModel)"
 msgstr "Nombre del proveedor (p. ej. MyLocalModel)"
 
-#: prefs.js:866
+#: prefs.js:838
 msgid "Command (e.g. codexbar --provider ...)"
 msgstr "Comando (p. ej. codexbar --provider ...)"
 
-#: prefs.js:871
+#: prefs.js:843
 msgid "Cancel"
 msgstr "Cancelar"
 
-#: prefs.js:872
+#: prefs.js:844
 msgid "Add"
 msgstr "Añadir"
 
-#: prefs.js:918
+#: prefs.js:890
 msgid "Maintenance"
 msgstr "Mantenimiento"
 
-#: prefs.js:922
+#: prefs.js:894
 msgid "Show Welcome Screen"
 msgstr "Mostrar pantalla de bienvenida"
 
-#: prefs.js:923
+#: prefs.js:895
 msgid "Reset first-run state"
 msgstr "Restablecer el estado de primer arranque"
 
-#: prefs.js:958 prefs.js:972
+#: prefs.js:930 prefs.js:944
 msgid "OK"
 msgstr "Aceptar"
 
-#: prefs.js:965
+#: prefs.js:937
 msgid "Cookie Importer Missing"
 msgstr "Falta el importador de cookies"
 
-#: prefs.js:967
+#: prefs.js:939
 msgid ""
 "Install scripts/codexbar-cookie-importer from the CodexBar GNOME repository "
 "into ~/.local/bin and make it executable. It requires openssl, sqlite3, and "
 "secret-tool."
-msgstr "Instala scripts/codexbar-cookie-importer del repositorio de CodexBar GNOME en ~/.local/bin y dale permisos de ejecución. Requiere openssl, sqlite3 y secret-tool."
+msgstr ""
+"Instala scripts/codexbar-cookie-importer del repositorio de CodexBar GNOME "
+"en ~/.local/bin y dale permisos de ejecución. Requiere openssl, sqlite3 y "
+"secret-tool."
 
-#: prefs.js:1018
+#: prefs.js:990
 msgid "Timeout"
 msgstr "Tiempo agotado"
 
-#: prefs.js:1020
+#: prefs.js:992
 msgid ""
 "The cookie importer is taking too long. Please ensure your browser is closed "
 "and try again."
@@ -559,23 +566,23 @@ msgstr ""
 "El importador de cookies está tardando demasiado. Asegúrate de tener el "
 "navegador cerrado e inténtalo de nuevo."
 
-#: prefs.js:1054
+#: prefs.js:1026
 msgid "Import Failed"
 msgstr "Error en la importación"
 
-#: prefs.js:1060
+#: prefs.js:1032
 msgid "Cookies imported successfully!"
 msgstr "¡Cookies importadas correctamente!"
 
-#: prefs.js:1066
+#: prefs.js:1038
 msgid "The importer returned no data."
 msgstr "El importador no devolvió datos."
 
-#: prefs.js:1070
+#: prefs.js:1042
 msgid "Error"
 msgstr "Error"
 
-#: prefs.js:1080
+#: prefs.js:1052
 msgid "Unexpected Error"
 msgstr "Error inesperado"
 
@@ -652,12 +659,15 @@ msgstr "Inicia sesión en OpenCode Console e importa sus cookies de sesión."
 
 #: adapters/OpenCodeConsoleFetcher.js:78
 msgid "Enter a valid OpenCode workspace ID (org_… or wrk_…)."
-msgstr "Introduce un ID de espacio de trabajo de OpenCode válido (org_… o wrk_…)."
+msgstr ""
+"Introduce un ID de espacio de trabajo de OpenCode válido (org_… o wrk_…)."
 
 #: adapters/OpenCodeConsoleFetcher.js:83
 msgid ""
 "Multiple OpenCode workspaces found. Set the workspace ID in Preferences."
-msgstr "Se encontraron varios espacios de trabajo de OpenCode. Configura su ID en Preferencias."
+msgstr ""
+"Se encontraron varios espacios de trabajo de OpenCode. Configura su ID en "
+"Preferencias."
 
 #: adapters/OpenCodeConsoleFetcher.js:95
 msgid "OpenCode subscription usage is unavailable."
@@ -671,7 +681,9 @@ msgstr "Este modo de facturación de OpenCode no es compatible."
 msgid ""
 "OpenCode session expired. Sign in to OpenCode Console and import cookies "
 "again."
-msgstr "La sesión de OpenCode caducó. Inicia sesión en OpenCode Console y vuelve a importar las cookies."
+msgstr ""
+"La sesión de OpenCode caducó. Inicia sesión en OpenCode Console y vuelve a "
+"importar las cookies."
 
 #: adapters/OpenCodeConsoleFetcher.js:137
 #, javascript-format
