@@ -984,6 +984,41 @@ if (tr("Weekly Window") !== "Weekly Window") throw new Error("en must ignore any
 setCatalog("en", null);
 console.log("✓ Language selection is explicit, with English as the fallback");
 
+// Ollama Cloud current layout (late 2026): "Monthly credits used" + "Refills to … on <date>"
+const refillDate = new Date(Date.now() + 25 * 24 * 3600 * 1000);
+const refillDateStr = refillDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+const refillShort = refillDate.toLocaleDateString([], { month: "short", day: "numeric" });
+const ollamaCreditsCurrentHtml = `
+  <main>
+    <div>Usage credits pro</div>
+    <div>Monthly credits refill in 4 weeks</div>
+    <div>Monthly credits $47.50</div>
+    <div>Refills to $60 on ${refillDateStr}.</div>
+    <div>Added credits $0</div>
+    <div>Total $47.50</div>
+    <div>Monthly credits used $12.50</div>
+  </main>`;
+const ollamaCurrent = ollamaFetcher._parseSettingsHtml(ollamaCreditsCurrentHtml);
+const currentWin = ollamaCurrent.usage.primary;
+if (!currentWin) {
+  throw new Error("Ollama current credit layout should produce a primary tier");
+}
+if (Math.abs(currentWin.usedPercent - (12.5 / 60) * 100) > 0.0001) {
+  throw new Error(`Expected 20.83% used from refill sentence, got ${currentWin.usedPercent}%`);
+}
+if (!currentWin.resetDescription.includes("$12.50 / $60.00")) {
+  throw new Error(`Expected dollar amounts in reset description, got "${currentWin.resetDescription}"`);
+}
+if (!currentWin.resetDescription.includes(`Resets ${refillShort}`)) {
+  throw new Error(`Expected refill date in reset description, got "${currentWin.resetDescription}"`);
+}
+if (ollamaCurrent.labels[0] !== "Monthly credits") {
+  throw new Error(`Expected "Monthly credits" label, got "${ollamaCurrent.labels[0]}"`);
+}
+if (ollamaCurrent.usage.loginMethod !== "Ollama Cloud Pro") {
+  throw new Error(`Expected page plan badge to yield Pro, got ${ollamaCurrent.usage.loginMethod}`);
+}
+console.log("✓ Ollama Cloud current credit layout parses used/refill amounts and date");
 
 // Labels come from the CLI JSON; the text output is only a fallback and its
 // "Pace:" lines are not window labels.
