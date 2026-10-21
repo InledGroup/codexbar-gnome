@@ -134,8 +134,17 @@ export class OllamaSettingsFetcher extends UsageFetcher {
      * Detect the monthly credit-pool block (transparent per-token pricing).
      */
     _hasCreditBlock(text) {
-        return /monthly usage\s*\$[\d,]+/i.test(text) ||
-            (text.toLowerCase().includes('usage credits') && /\$[\d,]+(?:\.\d{1,2})?\s*current balance/i.test(text));
+        const lower = text.toLowerCase();
+        // Current layout: "Usage credits pro … Monthly credits used $X … Refills to $Y on <date>"
+        if (/monthly credits used\s*\$[\d,]+/i.test(text)) return true;
+        if (/refills to\s*\$[\d,]+/i.test(text)) return true;
+
+        // Previous layout: "Monthly usage $X of $Y used"
+        if (/monthly usage\s*\$[\d,]+/i.test(text)) return true;
+
+        // Older pay-as-you-go variant: "usage credits … $X current balance"
+        return lower.includes('usage credits') &&
+            /\$[\d,]+(?:\.\d{1,2})?\s*current balance/i.test(text);
     }
 
     _parseSettingsHtml(html, billingHtml = null) {
@@ -190,23 +199,46 @@ export class OllamaSettingsFetcher extends UsageFetcher {
      * just like other windowed providers.
      */
     _parseCreditPool(html, text, billingHtml, accountEmail, loginMethod) {
-        const poolMatch = text.match(/monthly usage\s*\$([\d,]+(?:\.\d{1,2})?)\s*of\s*\$([\d,]+(?:\.\d{1,2})?)\s*used/i);
-        const used = poolMatch ? this._parseAmount(poolMatch[1]) : null;
-        const limit = poolMatch ? this._parseAmount(poolMatch[2]) : null;
+        let used = null;
+        let limit = null;
+        let resetDate = null;
+        let layout = 'credits';
+
+        // Current layout (late 2026): used is spelled out, limit comes from the refill
+        // sentence, which also carries the exact refill date.
+        const usedMatch = text.match(/monthly credits used\s*\$([\d,]+(?:\.\d{1,2})?)/i);
+        const refillMatch = text.match(/refills to\s*\$([\d,]+(?:\.\d{1,2})?)\s+on\s+([A-Za-z]+\s+\d{1,2}(?:,?\s*\d{4})?)/i);
+        if (usedMatch && refillMatch) {
+            used = this._parseAmount(usedMatch[1]);
+            limit = this._parseAmount(refillMatch[1]);
+            resetDate = this._parseRenewalDate(refillMatch[2]);
+        }
+
+        // Previous layout: "Monthly usage $used of $limit used"
+        if (used === null || limit === null) {
+            const poolMatch = text.match(/monthly usage\s*\$([\d,]+(?:\.\d{1,2})?)\s*of\s*\$([\d,]+(?:\.\d{1,2})?)\s*used/i);
+            if (poolMatch) {
+                used = this._parseAmount(poolMatch[1]);
+                limit = this._parseAmount(poolMatch[2]);
+                layout = 'usage';
+            }
+        }
 
         if (used === null || limit === null || limit <= 0) {
             throw new UsageApiError('Ollama Cloud credit block was found, but usage amounts could not be parsed.');
         }
 
-        const balanceMatch = text.match(/\$([\d,]+(?:\.\d{1,2})?)\s*current balance/i);
+        // Purchased credits on top of the monthly pool.
+        const balanceMatch =
+            text.match(/added credits\s*\$([\d,]+(?:\.\d{1,2})?)/i) ||
+            text.match(/\$([\d,]+(?:\.\d{1,2})?)\s*current balance/i);
         const balance = balanceMatch ? this._parseAmount(balanceMatch[1]) : null;
 
         let billingPlan = '';
-        let resetDate = null;
         if (billingHtml) {
             const info = this._extractBillingInfo(this._htmlToText(billingHtml));
             billingPlan = info.plan;
-            resetDate = info.resetDate;
+            if (!resetDate) resetDate = info.resetDate;
         }
 
         let resetAfterSeconds = 0;
@@ -217,16 +249,26 @@ export class OllamaSettingsFetcher extends UsageFetcher {
             windowSeconds = this._monthSeconds(resetDate);
             resetLabel = `Resets ${resetDate.toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
         } else {
-            const monthlyChunk = this._chunkAround(html, /monthly usage/i, 2000);
-            const monthlyText = this._chunkAround(text, /monthly usage/i, 600);
-            resetAfterSeconds = this._extractResetAfterSeconds(monthlyChunk, monthlyText);
-            resetLabel = this._extractResetText(monthlyText);
+            const poolChunk = this._chunkAround(html, /monthly (?:credits|usage)/i, 2000);
+            const poolText = this._chunkAround(text, /monthly (?:credits|usage)/i, 600);
+            resetAfterSeconds = this._extractResetAfterSeconds(poolChunk, poolText);
+            resetLabel = this._extractResetText(poolText);
         }
 
-        const method = billingPlan ? `Ollama Cloud ${billingPlan}` : loginMethod;
+        // Page plan badge looks like "Usage credits pro"; billing spells it "Pro".
+        const pagePlanMatch = text.match(/usage credits\s+(free|pro|max|team)\b/i);
+        const pagePlan = pagePlanMatch
+            ? pagePlanMatch[1].charAt(0).toUpperCase() + pagePlanMatch[1].slice(1).toLowerCase()
+            : '';
+
+        const method = billingPlan
+            ? `Ollama Cloud ${billingPlan}`
+            : (pagePlan ? `Ollama Cloud ${pagePlan}` : loginMethod);
+
+        const baseLabel = layout === 'usage' ? 'Monthly usage' : 'Monthly credits';
         const label = balance !== null && balance > 0
-            ? `Monthly usage (+$${balance.toFixed(2)} credits)`
-            : 'Monthly usage';
+            ? `${baseLabel} (+$${balance.toFixed(2)} credits)`
+            : baseLabel;
         const amounts = `$${used.toFixed(2)} / $${limit.toFixed(2)}`;
 
         return {
@@ -476,7 +518,7 @@ export class OllamaSettingsFetcher extends UsageFetcher {
      * Parse relative reset text like "resets in 2 hours".
      */
     _parseRelativeResetSeconds(chunk) {
-        const resetMatch = chunk.match(/(?:reset|refresh)[^\.]*?\bin\s+([^\.]+)/i);
+        const resetMatch = chunk.match(/(?:reset|refresh|refill)[^\.]*?\bin\s+([^\.]+)/i);
         if (!resetMatch) return 0;
 
         const text = resetMatch[1];
@@ -496,7 +538,7 @@ export class OllamaSettingsFetcher extends UsageFetcher {
      * Extract a reset description text from a chunk.
      */
     _extractResetText(chunk) {
-        const match = chunk.match(/((?:reset|refresh)[^\.]{0,120})/i);
+        const match = chunk.match(/((?:reset|refresh|refill)[^\.]{0,120})/i);
         return match ? match[1].trim() : '';
     }
 
