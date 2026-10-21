@@ -20,6 +20,8 @@ import {
   parseGeneratedCommand,
 } from "./providerSources.js";
 
+await import('./test_opencode.js');
+
 const client = new UsageApiClient();
 
 const codexSparkUsage = {

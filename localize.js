@@ -186,6 +186,9 @@ export const formatPanelText = (usage, displayMode, elapsedSeconds, tr = (s) => 
   // Balance-only providers (e.g. DeepSeek) or plain provider cost.
   const balance = usage.primary?.resetDescription?.match(/^\$[0-9.]+/);
   if (balance) return balance[0];
+  if (Number.isFinite(usage.balanceUSD) && (displayMode === "remaining" || !usage.providerCost)) {
+    return `$${usage.balanceUSD.toFixed(2)}`;
+  }
   if (usage.providerCost && typeof usage.providerCost.used === "number") {
     const symbol = usage.providerCost.currencyCode === "USD" ? "$" : "";
     return `${symbol}${usage.providerCost.used.toFixed(2)}`;

@@ -135,6 +135,49 @@ You can choose how metrics are displayed:
 - **Remaining**: Shows the percentage of quota left (default).
 - **Used**: Shows the percentage of quota consumed.
 
+### OpenCode and OpenCode Go on Linux
+
+Open **CodexBar Preferences → AI Providers**, enable **OpenCode** or **OpenCode Go**,
+and leave **Connection** on **Direct API (session cookies)**. These entries are
+disabled until you enable them. OpenCode refers to the hosted Zen/Console account;
+it does not aggregate other providers you use inside the OpenCode app.
+
+1. Sign in to [OpenCode Console](https://opencode.ai/console) in Chrome, Brave, or
+   Edge. Native and Flatpak Chrome/Edge profile locations are recognized.
+2. Install/update the repository's `scripts/codexbar-cookie-importer` in
+   `~/.local/bin`, then click **Auto-Login from Browser**. The helper requires
+   `openssl`, `sqlite3`, and `secret-tool`. It supports the existing Linux v10/v11
+   browser encryption format when the browser's Safe Storage key is accessible.
+   Other browser encryption/keyring configurations may require manual entry.
+3. Alternatively, copy the `__Host-console_session` cookie from the Console's
+   browser developer tools and enter `__Host-console_session=VALUE` in the password
+   field. Credentials are stored in the desktop keyring, never in provider settings.
+4. With one workspace, discovery is automatic. With multiple workspaces, enter
+   its `org_…` or `wrk_…` ID from the Console URL in **Workspace ID**. No accounts
+   are combined or selected arbitrarily. Each provider can use its own workspace.
+
+Go shows the reported five-hour, weekly, and monthly subscription meters. Missing
+resets remain unknown. **Zen balance** is shown separately, including zero or
+negative balances. OpenCode PAYG accounts show **Last 30 days** spend and their
+available balance; they do not get a fabricated quota percentage. A successful
+response without a Go subscription displays that state explicitly.
+
+Direct API uses the current Console JSON endpoints and works without the
+CodexBar CLI's browser integration. Optional CLI mode uses the distinct IDs
+`opencode` and `opencodego`; verify both with `codexbar --help` (tested with
+0.78.0). In that version the base OpenCode CLI web source requires macOS, so use
+Direct API on Linux. Legacy-only sessions must sign in to the current Console.
+Expired sessions require importing cookies again.
+
+For a specific browser profile, the helper also accepts
+`--provider opencodego --profile /absolute/path/to/Cookies`. Console cookies are
+read from a single profile, with exact cookie-name and domain matching.
+
+The OpenCode symbolic icons are adapted from
+[CodexBar v0.78.0](https://github.com/steipete/CodexBar/tree/v0.78.0/Sources/CodexBar/Resources)
+under its MIT license (included in `media/logos/OpenCode-LICENSE.txt`). This
+extension remains based on the original InledGroup/codexbar-gnome project.
+
 
 
 ## License
