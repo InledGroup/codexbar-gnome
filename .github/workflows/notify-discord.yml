@@ -1,0 +1,44 @@
+name: Notify Discord
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Discord notification
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_LABELS: ${{ join(github.event.issue.labels.*.name, ', ') }}
+          ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Pick an icon and type label based on the issue labels
+          case ",$ISSUE_LABELS," in
+            *,bug,*)    ICON="🐛"; TYPE="Bug" ;;
+            *,idea,*)   ICON="💡"; TYPE="Idea" ;;
+            *,task,*)   ICON="✅"; TYPE="Task" ;;
+            *)          ICON="📌"; TYPE="Report" ;;
+          esac
+
+          # First ~400 chars of the body, single line
+          SNIPPET=$(printf '%s' "$ISSUE_BODY" | tr '\n' ' ' | cut -c1-400)
+
+          MSG=$(printf '%s **%s: %s**\n📂 Repo: `%s`\n👤 %s\n🏷️ Labels: %s\n\n%s\n\n%s' \
+            "$ICON" "$TYPE" "$ISSUE_TITLE" "$REPO" "$ISSUE_AUTHOR" "$ISSUE_LABELS" "$SNIPPET" "$ISSUE_URL")
+
+          HTTP_CODE=$(jq -n --arg content "$MSG" '{content: $content}' | \
+            curl -sS -o /tmp/discord_resp.json -w '%{http_code}' -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" -d @-)
+          echo "Discord response: $HTTP_CODE"
+          cat /tmp/discord_resp.json
+          # Fail the step if Discord rejected the message (4xx/5xx)
+          [[ "$HTTP_CODE" =~ ^2 ]] || exit 1
