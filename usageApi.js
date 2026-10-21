@@ -292,6 +292,27 @@ export const calculateUsagePace = (usageWindow) => {
     };
 };
 
+const WINDOW_TIERS = ['primary', 'secondary', 'tertiary', 'quaternary'];
+
+/** Window labels from the CLI's `rateWindowLabels`, ordered by tier. */
+export function extractWindowLabels(payload) {
+    const byTier = payload?.rateWindowLabels;
+    if (!byTier || typeof byTier !== 'object') return [];
+    const labels = WINDOW_TIERS.map(tier => (typeof byTier[tier] === 'string' ? byTier[tier].trim() : ''));
+    while (labels.length > 0 && !labels[labels.length - 1]) labels.pop();
+    return labels;
+}
+
+/** Window labels from the CLI's text output ("Session: 98% left"), skipping pace lines. */
+export function parseTextWindowLabels(text) {
+    const labels = [];
+    for (const line of (text || '').split('\n')) {
+        const match = line.match(/^([^:]+):\s+\d+%/);
+        if (match && match[1].trim() !== 'Pace') labels.push(match[1].trim());
+    }
+    return labels;
+}
+
 export class UsageApiClient {
     constructor(extensionPath = null) {
         this._session = new Soup.Session();
