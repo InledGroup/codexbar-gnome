@@ -1,0 +1,53 @@
+name: Add to Project Board
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: read
+
+jobs:
+  add-to-project:
+    runs-on: ubuntu-latest
+    steps:
+      # NOTE: Adding items to an org ProjectV2 requires a token with `project` scope,
+      # so GITHUB_TOKEN cannot be used here. Store a PAT with organization Projects
+      # read/write access as the PROJECT_PAT secret.
+      - name: Add issue to project
+        id: add-project
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+        run: |
+          ITEM_ID=$(gh api graphql -f query='
+            mutation($projectId: ID!, $issueId: ID!) {
+              addProjectV2ItemById(input: {projectId: $projectId, contentId: $issueId}) {
+                item { id }
+              }
+            }' \
+            -f projectId="PVT_kwDODfyzbM4BY-xQ" \
+            -f issueId="${{ github.event.issue.node_id }}" \
+            --jq '.data.addProjectV2ItemById.item.id')
+          echo "itemId=$ITEM_ID" >> "$GITHUB_OUTPUT"
+
+      # The issue's labels (bug / idea / task) show up automatically in the
+      # board's built-in Labels field, so the item is classified by type.
+      # Here we just set Status = "To triage" so it lands in the Triage view.
+      - name: Set Status (To triage)
+        if: steps.add-project.outputs.itemId != ''
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_PAT }}
+          ITEM_ID: ${{ steps.add-project.outputs.itemId }}
+        run: |
+          gh api graphql -f query='
+            mutation($pid: ID!, $iid: ID!, $fid: ID!, $oid: String!) {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: $pid, itemId: $iid, fieldId: $fid,
+                value: { singleSelectOptionId: $oid }
+              }) { projectV2Item { id } }
+            }' \
+            -f pid="PVT_kwDODfyzbM4BY-xQ" \
+            -f iid="$ITEM_ID" \
+            -f fid="PVTSSF_lADODfyzbM4BY-xQzhUAs7k" \
+            -f oid="f971fb55"
+          echo "Set Status=To triage OK"
