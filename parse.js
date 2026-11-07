@@ -107,6 +107,29 @@ function isMeterWindow(win) {
   return Boolean(win.windowMinutes || win.windowSeconds || win.resetsAt);
 }
 
+function parseDetails(details) {
+  if (!Array.isArray(details)) return [];
+  return details.slice(0, 8).flatMap((section) => {
+    if (!section || typeof section !== "object") return [];
+    const rows = (Array.isArray(section.rows) ? section.rows : []).slice(0, 20).flatMap((row) => {
+      if (!row || typeof row.label !== "string" || typeof row.value !== "string") return [];
+      return [{ label: row.label.slice(0, 120), value: row.value.slice(0, 240),
+        secondaryValue: typeof row.secondaryValue === "string" ? row.secondaryValue.slice(0, 240) : "" }];
+    });
+    let chart = null;
+    if (section.chart?.kind === "bars" && Array.isArray(section.chart.points) && section.chart.points.length <= 120) {
+      const points = section.chart.points.flatMap((point) =>
+        point && typeof point.label === "string" && Number.isFinite(point.value) && point.value >= 0
+          ? [{ label: point.label.slice(0, 100), value: point.value }]
+          : [],
+      );
+      if (points.length) chart = { title: String(section.chart.title || section.title || "Usage").slice(0, 120), points };
+    }
+    if (!rows.length && !chart) return [];
+    return [{ title: typeof section.title === "string" ? section.title.slice(0, 120) : "Details", rows, chart }];
+  });
+}
+
 /**
  * @param {object} entry One object from the CLI's top-level array.
  * @returns {object|null} Normalized provider, or null if unusable.
@@ -161,7 +184,6 @@ function parseProvider(entry) {
       pace: entry.pace?.[key] || null,
     });
   }
-
   return {
     ...base,
     kind: windows.length === 0 ? "error" : windows.some((w) => w.meter) ? "windows" : "balance",
@@ -169,6 +191,7 @@ function parseProvider(entry) {
     creditsRemaining: entry.credits?.remaining ?? null,
     resetCreditsAvailable: entry.resetCredits?.available ?? null,
     plan: usage.identity?.loginMethod || usage.loginMethod || null,
+    details: parseDetails(usage.details),
     updatedAt: usage.updatedAt || null,
     error: windows.length === 0 ? "No usage windows reported" : null,
   };

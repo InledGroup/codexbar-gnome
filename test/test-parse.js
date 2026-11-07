@@ -111,6 +111,33 @@ check("codex plan", codex.plan, "plus");
 check("codex pace summary", codex.windows[0].pace.summary,
   "On pace | Expected 5% used | Runs out in 6d 14h");
 
+console.log("z.ai quota details, plan, and model-usage charts are retained");
+const zai = parseUsagePayload([{
+  provider: "zai",
+  rateWindowLabels: { primary: "5-hour", secondary: "Weekly" },
+  usage: {
+    identity: { loginMethod: "lite" },
+    primary: { usedPercent: 0, windowMinutes: 300, resetDescription: "5-hour" },
+    secondary: { usedPercent: 100, windowMinutes: 10080, resetDescription: "1 week window" },
+    details: [
+      { title: "Quota details", rows: [
+        { label: "Credit quota", value: "100% used", secondaryValue: "10000 limit · 0 remaining" },
+        { label: "Quota rate", value: "Off-peak", secondaryValue: "peak in 1d 6h" },
+      ] },
+      { title: "Hourly tokens", rows: [{ label: "GLM-5.3-Flash", value: "9.73M" }],
+        chart: { kind: "bars", title: "Hourly tokens", unit: "tokens", points: [
+          { label: "2026-11-07 00:00", value: 6582896 },
+        ] } },
+    ],
+  },
+}]).providers[0];
+check("z.ai quota windows", zai.windows.map((w) => [w.label, w.usedPercent]), [["Session", 0], ["Weekly", 100]]);
+check("z.ai plan", zai.plan, "lite");
+check("z.ai quota detail row", zai.details[0].rows[0], {
+  label: "Credit quota", value: "100% used", secondaryValue: "10000 limit · 0 remaining",
+});
+check("z.ai chart points", zai.details[1].chart.points, [{ label: "2026-11-07 00:00", value: 6582896 }]);
+
 console.log("errors surface as a tab, not a crash");
 const withError = parseUsagePayload([
   { provider: "opencodego", source: "local+api", usage: loadFixture("usage-opencodego.json")[0].usage },

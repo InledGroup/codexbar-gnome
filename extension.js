@@ -807,6 +807,26 @@ export default class CodexBarExtension extends Extension {
         this._contentBox.add_child(dimLabel({ text }));
       }
     }
+    if (provider.plan && provider.id !== "codex") {
+      const plan = provider.plan[0].toUpperCase() + provider.plan.slice(1);
+      this._contentBox.add_child(dimLabel({ text: _("Plan: %s").format(plan) }));
+    }
+
+    for (const section of provider.details || []) {
+      if (section.rows.length) {
+        this._contentBox.add_child(new St.Label({ text: section.title, style_class: "codexbar-section" }));
+        for (const row of section.rows) {
+          const details = [row.value, row.secondaryValue].filter(Boolean).join(" · ");
+          this._contentBox.add_child(dimLabel({ text: `${row.label}: ${details}`, width: BAR_WIDTH_PX }));
+        }
+      }
+      if (section.chart) {
+        const item = new PopupMenu.PopupSubMenuMenuItem(section.chart.title);
+        this._addChartToMenu(item.menu, section.chart.points.map((point) => ({ date: point.label, value: point.value })),
+          "value", formatTokens);
+        this._historyBox.addMenuItem(item);
+      }
+    }
 
     if (this._cost?.providers?.some((entry) => entry.id === provider.id &&
         [entry.todayCost, entry.todayTokens, entry.cost, entry.tokens].some((value) => value > 0))) {
@@ -1145,10 +1165,10 @@ export default class CodexBarExtension extends Extension {
 
   _addChartToMenu(menu, days, field, format, labelField = "date") {
     const detail = new St.BoxLayout({ orientation: Clutter.Orientation.VERTICAL, width: BAR_WIDTH_PX, x_expand: true, style_class: "codexbar-history-detail" });
-    const primaryDetail = dimLabel({ text: labelField === "model" ? _("Hover or focus a model for details") : _("Hover or focus a bar for details"), x_expand: true });
+    const primaryDetail = dimLabel({ style_class: "codexbar-subtitle codexbar-history-detail", text: labelField === "model" ? _("Hover or focus a model for details") : _("Hover or focus a bar for details"), x_expand: true });
     primaryDetail.clutter_text.line_wrap = false;
     primaryDetail.clutter_text.ellipsize = Pango.EllipsizeMode.END;
-    const secondaryDetail = dimLabel({ text: "\u00a0", x_expand: true });
+    const secondaryDetail = dimLabel({ style_class: "codexbar-subtitle codexbar-history-detail", text: "\u00a0", x_expand: true });
     secondaryDetail.clutter_text.line_wrap = false;
     secondaryDetail.clutter_text.ellipsize = Pango.EllipsizeMode.END;
     detail.add_child(primaryDetail);
