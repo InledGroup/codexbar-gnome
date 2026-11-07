@@ -997,7 +997,8 @@ export default class CodexBarExtension extends Extension {
       new St.Widget({
         style_class: "codexbar-bar-fill",
         x: 0,
-        style: `width: ${fillWidth(BAR_WIDTH_PX, window.usedPercent)}px; background-color: ${barColor(window.usedPercent)};`,
+        width: fillWidth(BAR_WIDTH_PX, window.usedPercent),
+        style: `background-color: ${barColor(window.usedPercent)};`,
       }),
     );
 
