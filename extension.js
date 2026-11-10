@@ -8,7 +8,9 @@ import Clutter from "gi://Clutter";
 import Pango from "gi://Pango";
 import { Extension } from "resource:///org/gnome/shell/extensions/extension.js";
 import * as PanelMenu from "resource:///org/gnome/shell/ui/panelMenu.js";
+import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
+import { ModalDialog } from "resource:///org/gnome/shell/ui/modalDialog.js";
 import {
   calculateUsagePace,
   deriveCreditsPercent,
@@ -16,6 +18,21 @@ import {
   UsageApiClient,
 } from "./usageApi.js";
 import { loadToken, nullTokenSchema } from "./secret.js";
+import {
+  mergeDiscoveredProviders,
+} from "./providerCatalog.js";
+import { discoverEnabledProviders } from "./providerDiscovery.js";
+import { PREDEFINED_PROVIDERS } from "./providerSources.js";
+import { formatMoney, formatTokens, parseCostPayload } from "./cost.js";
+import {
+  ADD_ACCOUNT_URL,
+  CLI_REPO_URL,
+  EGO_URL,
+  EXTENSION_REPO_URL,
+  LICENSE_URL,
+  statusUrl,
+  usageUrl,
+} from "./links.js";
 import {
   applyLanguage,
   currentLanguage,
@@ -39,6 +56,9 @@ function logDev(msg) {
 // `rgba()` foregrounds only because it ships separate light and dark
 // stylesheets — an extension with a single stylesheet cannot.
 const SECONDARY_TEXT_OPACITY = 200;
+
+// Width of the per-tab load underline. The fill is sized in pixels against it.
+const TAB_TRACK_WIDTH = 44;
 
 /**
  * Build a dimmed secondary label.
@@ -117,13 +137,32 @@ export default class CodexBarExtension extends Extension {
     });
     this._headerBox.add_child(this._headerTitle);
 
-    let refreshBtn = new St.Button({
-      child: new St.Icon({ icon_name: "view-refresh-symbolic", icon_size: 16 }),
+    const refreshContent = new St.BoxLayout({
+      orientation: Clutter.Orientation.HORIZONTAL,
+      y_align: Clutter.ActorAlign.CENTER,
+    });
+    this._refreshIcon = new St.Icon({
+      icon_name: "view-refresh-symbolic",
+      icon_size: 16,
+    });
+    // A tiny rotating glyph keeps the button useful while the CLI runs; St
+    // has no spinner widget of its own.
+    this._refreshSpinner = new St.Label({
+      text: "◐",
+      style_class: "codexbar-refresh-spinner",
+      visible: false,
+      y_align: Clutter.ActorAlign.CENTER,
+    });
+    refreshContent.add_child(this._refreshIcon);
+    refreshContent.add_child(this._refreshSpinner);
+
+    this._refreshBtn = new St.Button({
+      child: refreshContent,
       style_class: "codexbar-header-button",
       y_align: Clutter.ActorAlign.CENTER,
     });
-    refreshBtn.connect("clicked", () => this._refreshData());
-    this._headerBox.add_child(refreshBtn);
+    this._refreshBtn.connect("clicked", () => this._requestRefresh());
+    this._headerBox.add_child(this._refreshBtn);
 
     let settingsBtn = new St.Button({
       child: new St.Icon({
@@ -154,25 +193,51 @@ export default class CodexBarExtension extends Extension {
     });
     this._indicator.menu.box.add_child(this._contentBox);
 
+    // Detail charts are submenus, so they need a real menu section rather than
+    // an actor inside the content box. The footer follows the content.
+    this._historySection = new PopupMenu.PopupMenuSection();
+    this._indicator.menu.addMenuItem(this._historySection);
+    this._footerSection = new PopupMenu.PopupMenuSection();
+    this._indicator.menu.addMenuItem(this._footerSection);
+    this._buildFooter();
+
     Main.panel.addToStatusArea(this.uuid, this._indicator);
 
     this._activeProviderIndex = 0;
     this._providersData = [];
     this._loading = false;
+    this._lastRefreshAt = 0;
+    this._aboutDialog = null;
     this._cancellable = new Gio.Cancellable();
+    this._cost = null;
+    this._costLoading = false;
+    this._spinnerTimeout = null;
+    this._spinnerFrame = 0;
+
+    // Opening the popup is a signal that the user wants current numbers; the
+    // timer alone can be up to `refresh-interval` minutes old.
+    this._indicator.menu.connect("open-state-changed", (_menu, isOpen) => {
+      if (!isOpen || this._loading) return;
+      if (Date.now() - this._lastRefreshAt < 10000) return;
+      this._requestRefresh();
+    });
 
     this._settings.connectObject(
       "changed::providers", () => this._onSettingsChanged(),
       "changed::refresh-interval", () => this._onSettingsChanged(),
       "changed::display-mode", () => this._updateUI(),
+      "changed::primary-provider", () => this._updateUI(),
       "changed::show-logos", () => this._updateUI(),
       "changed::show-pacing-info", () => this._updateUI(),
-      "changed::show-provider-details", () => this._updateUI(),
+      "changed::show-provider-details", () => {
+        this._updateUI();
+        if (this._settings.get_boolean("show-provider-details")) this._fetchCost();
+      },
       "changed::first-run", () => this._updateUI(),
       "changed::language", () => {
         this._applyLanguage();
         this._updateUI();
-        this._refreshData();
+        this._requestRefresh();
       },
       "changed::dev-custom-output-enabled", () => this._onSettingsChanged(),
       "changed::dev-custom-output-provider-name", () => this._onSettingsChanged(),
@@ -180,6 +245,7 @@ export default class CodexBarExtension extends Extension {
       this
     );
     this._onSettingsChanged();
+    this._discoverProviders();
 
     // Keep the panel's reset countdown ticking between refreshes.
     this._panelTickId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 60, () => {
@@ -229,6 +295,19 @@ export default class CodexBarExtension extends Extension {
       this._copyTimeouts.forEach((id) => GLib.source_remove(id));
       this._copyTimeouts = null;
     }
+    if (this._spinnerTimeout) {
+      GLib.source_remove(this._spinnerTimeout);
+      this._spinnerTimeout = null;
+    }
+    this._refreshSpinner = null;
+    this._refreshIcon = null;
+    this._refreshBtn = null;
+
+    if (this._aboutDialog) {
+      this._aboutDialog.close();
+      this._aboutDialog.destroy();
+      this._aboutDialog = null;
+    }
 
     if (this._settings) {
       this._settings.disconnectObject(this);
@@ -272,6 +351,8 @@ export default class CodexBarExtension extends Extension {
       this._contentBox.destroy();
       this._contentBox = null;
     }
+    this._historySection = null;
+    this._footerSection = null;
     if (this._indicator) {
       this._indicator.destroy();
       this._indicator = null;
@@ -287,9 +368,85 @@ export default class CodexBarExtension extends Extension {
 
     this._providersData = [];
     this._activeProviderIndex = 0;
+    this._cost = null;
+    this._costLoading = false;
 
     nullTokenSchema();
 
+  }
+
+  /**
+   * Add providers that are enabled in the CLI but missing from settings.
+   * Runs after enable and merges into the current list, so a concurrent
+   * Preferences edit is not overwritten.
+   */
+  _discoverProviders() {
+    discoverEnabledProviders((discovered) => {
+      if (!this._settings || discovered.length === 0) return;
+
+      let saved = [];
+      try {
+        saved = JSON.parse(this._settings.get_string("providers"));
+      } catch (e) {
+        saved = [];
+      }
+      let dismissed = [];
+      try {
+        const value = JSON.parse(
+          this._settings.get_string("dismissed-providers"),
+        );
+        if (Array.isArray(value)) dismissed = value;
+      } catch (e) {
+        dismissed = [];
+      }
+
+      const merged = mergeDiscoveredProviders(
+        saved,
+        discovered,
+        PREDEFINED_PROVIDERS,
+        dismissed,
+      );
+      if (JSON.stringify(merged) !== JSON.stringify(saved)) {
+        this._settings.set_string("providers", JSON.stringify(merged));
+      }
+    });
+  }
+
+  _startRefreshSpinner() {
+    if (!this._refreshSpinner || !this._refreshIcon) return;
+    this._refreshIcon.visible = false;
+    this._refreshSpinner.visible = true;
+    if (this._spinnerTimeout) return;
+    const frames = ["◐", "◓", "◑", "◒"];
+    this._spinnerFrame = 0;
+    this._spinnerTimeout = GLib.timeout_add(
+      GLib.PRIORITY_DEFAULT,
+      140,
+      () => {
+        if (!this._refreshSpinner) {
+          this._spinnerTimeout = null;
+          return GLib.SOURCE_REMOVE;
+        }
+        this._spinnerFrame = (this._spinnerFrame + 1) % frames.length;
+        this._refreshSpinner.set_text(frames[this._spinnerFrame]);
+        return GLib.SOURCE_CONTINUE;
+      },
+    );
+  }
+
+  _stopRefreshSpinner() {
+    if (this._spinnerTimeout) {
+      GLib.source_remove(this._spinnerTimeout);
+      this._spinnerTimeout = null;
+    }
+    if (this._refreshIcon) this._refreshIcon.visible = true;
+    if (this._refreshSpinner) this._refreshSpinner.visible = false;
+  }
+
+  _finishRefresh() {
+    this._loading = false;
+    this._stopRefreshSpinner();
+    if (this._headerTitle) this._headerTitle.set_text(_("CodexBar"));
   }
 
   /**
@@ -311,7 +468,7 @@ export default class CodexBarExtension extends Extension {
     // Draw the provider logos right away instead of waiting for the first
     // CLI round-trip, which otherwise leaves the fallback icon up at login.
     this._updatePanel();
-    this._refreshData();
+    this._requestRefresh();
     this._setupTimeout();
   }
 
@@ -328,7 +485,7 @@ export default class CodexBarExtension extends Extension {
         GLib.PRIORITY_DEFAULT,
         interval,
         () => {
-          this._refreshData();
+          this._requestRefresh();
           return GLib.SOURCE_CONTINUE;
         },
       );
@@ -338,11 +495,23 @@ export default class CodexBarExtension extends Extension {
  
 
   /**
+   * Refresh from UI callbacks without leaving a rejected promise unobserved.
+   */
+  _requestRefresh() {
+    this._refreshData().catch((error) => {
+      console.error(error, "CodexBar: refresh failed");
+      this._finishRefresh();
+    });
+  }
+
+  /**
    * Refresh usage data for all enabled providers.
    */
   async _refreshData() {
     if (this._loading || this._providers.length === 0) return;
     this._loading = true;
+    this._lastRefreshAt = Date.now();
+    this._startRefreshSpinner();
 
     if (this._headerTitle)
       this._headerTitle.set_text(_("CodexBar (Refreshing...)"));
@@ -412,13 +581,24 @@ export default class CodexBarExtension extends Extension {
         this._activeProviderIndex = 0;
       }
 
-      this._loading = false;
-      if (this._headerTitle) this._headerTitle.set_text(_("CodexBar"));
+      this._finishRefresh();
       this._updateUI();
       return;
     }
 
-    this._providersData = [];
+    // Cost is a separate command and can lag behind usage; fetch it alongside
+    // the provider loop and rerender when it arrives.
+    if (this._settings.get_boolean("show-provider-details")) this._fetchCost();
+
+    // Keep the last good entry for a provider that fails this round. The popup
+    // then shows its previous values with a stale marker instead of going blank
+    // because another provider was temporarily unavailable.
+    const previousById = new Map();
+    (this._providers || []).forEach((provider, index) => {
+      const entry = this._providersData?.[index];
+      if (provider?.id && entry?.data) previousById.set(provider.id, entry);
+    });
+    const nextData = new Array(this._providers.length);
 
     for (let i = 0; i < this._providers.length; i++) {
       const provider = this._providers[i];
@@ -430,7 +610,7 @@ export default class CodexBarExtension extends Extension {
           const token = await loadToken(provider.id);
           if (!token) {
             logDev(`Error: No token found in keyring for provider: ${provider.name}`);
-            this._providersData[i] = { error: _("No token found in keyring") };
+            nextData[i] = { error: _("No token found in keyring") };
             continue;
           }
           data = await this._apiClient.fetchSummary(token, provider.id, this._cancellable, {
@@ -463,7 +643,7 @@ export default class CodexBarExtension extends Extension {
             );
           }
 
-          this._providersData[i] = {
+          nextData[i] = {
             data: data,
             labels: apiLabels,
           };
@@ -474,14 +654,14 @@ export default class CodexBarExtension extends Extension {
           let msg = error.message;
           if (!msg && error.toString) msg = error.toString();
           if (!msg || msg === "[object Object]") msg = _("Unknown API error");
-          this._providersData[i] = { error: msg };
+          nextData[i] = { error: msg };
         }
         continue;
       }
 
       if (!provider.command) {
         logDev(`Error: No CLI command configured for provider: ${provider.name}`);
-        this._providersData[i] = { error: _("No command configured") };
+        nextData[i] = { error: _("No command configured") };
         continue;
       }
 
@@ -493,6 +673,7 @@ export default class CodexBarExtension extends Extension {
         );
         if (!this._cancellable || this._cancellable.is_cancelled()) {
           logDev(`CLI execution cancelled for provider: ${provider.name}`);
+          this._finishRefresh();
           return;
         }
 
@@ -524,7 +705,7 @@ export default class CodexBarExtension extends Extension {
           }
         }
 
-        this._providersData[i] = {
+        nextData[i] = {
           data: rawData,
           labels: finalLabels,
           command: result.command,
@@ -540,7 +721,7 @@ export default class CodexBarExtension extends Extension {
           let msg = error.message;
           if (!msg && error.toString) msg = error.toString();
           if (!msg || msg === "[object Object]") msg = _("Unknown CLI error");
-          this._providersData[i] = {
+          nextData[i] = {
             error: msg,
             command: provider.command,
           };
@@ -548,17 +729,126 @@ export default class CodexBarExtension extends Extension {
       }
     }
 
-    if (this._cancellable && !this._cancellable.is_cancelled()) {
-      // One timestamp for the whole sequential fetch; the panel countdown is
-      // skewed by the fetch duration (seconds). Stamp per provider if needed.
-      const fetchedAt = Date.now();
-      this._providersData.forEach((d) => {
-        if (d) d.fetchedAt = fetchedAt;
-      });
-      this._loading = false;
-      if (this._headerTitle) this._headerTitle.set_text(_("CodexBar"));
-      this._updateUI();
+    if (!this._cancellable || this._cancellable.is_cancelled()) {
+      this._finishRefresh();
+      return;
     }
+
+    // One timestamp for the whole sequential fetch; the panel countdown is
+    // skewed by the fetch duration (seconds). Stamp per provider if needed.
+    const fetchedAt = Date.now();
+    nextData.forEach((entry, index) => {
+      if (!entry?.error || entry.data) return;
+      const previous = previousById.get(this._providers[index]?.id);
+      if (!previous?.data) return;
+      nextData[index] = {
+        ...previous,
+        stale: true,
+        staleError: entry.error,
+        fetchedAt,
+      };
+    });
+    nextData.forEach((entry) => {
+      if (entry) entry.fetchedAt = fetchedAt;
+    });
+
+    this._providersData = nextData;
+    this._finishRefresh();
+    this._updateUI();
+  }
+
+  /**
+   * Fetch local cost data without blocking the usage refresh. Failures are
+   * expected for providers the CLI does not support and simply hide the block.
+   */
+  async _fetchCost() {
+    if (
+      this._costLoading ||
+      !this._apiClient ||
+      !this._cancellable ||
+      (this._providers?.length ?? 0) === 0
+    )
+      return;
+    this._costLoading = true;
+    try {
+      const payload = await this._apiClient.fetchCost(this._cancellable);
+      if (!this._cancellable || this._cancellable.is_cancelled()) return;
+      const cost = parseCostPayload(payload);
+      if (JSON.stringify(cost) === JSON.stringify(this._cost)) return;
+      this._cost = cost;
+      // While a usage refresh is in flight it will rerender when it finishes;
+      // otherwise update an open popup now.
+      if (!this._loading && this._indicator?.menu.isOpen) this._updateUI();
+    } catch (error) {
+      logDev(`Cost fetch failed: ${error.message || error}`);
+    } finally {
+      this._costLoading = false;
+    }
+  }
+
+  /**
+   * The provider the panel battery tracks.
+   */
+  _primaryProvider() {
+    const providers = this._providers || [];
+    if (providers.length === 0) return null;
+    const wanted = this._settings?.get_string("primary-provider") || "";
+    return providers.find((provider) => provider.id === wanted) || providers[0];
+  }
+
+  /**
+   * Average usage percentage for a provider entry, honouring display mode.
+   * @param {object|undefined} entry
+   * @returns {number}
+   */
+  _usagePercent(entry) {
+    const usage = entry?.data?.usage;
+    if (!usage) return 0;
+    const displayMode = this._settings.get_string("display-mode");
+    const creditsPercent = deriveCreditsPercent(
+      normalizeDetailSections(usage.details),
+    );
+    const degenerate = (tierData) =>
+      !!tierData &&
+      !tierData.windowSeconds &&
+      tierData.usedPercent === 0 &&
+      !tierData.resetDescription;
+
+    let total = 0;
+    let count = 0;
+    for (const tier of ["primary", "secondary", "tertiary", "quaternary"]) {
+      const tierData = usage[tier];
+      if (!tierData || tierData.usedPercent === undefined) continue;
+      if (degenerate(tierData) && creditsPercent === null) continue;
+      const percent = degenerate(tierData)
+        ? creditsPercent
+        : this._normalizePercent(tierData.usedPercent);
+      total += displayMode === "remaining" ? 100 - percent : percent;
+      count++;
+    }
+    if (count === 0 && usage.providerCost && usage.providerCost.limit > 0) {
+      const percent = (usage.providerCost.used / usage.providerCost.limit) * 100;
+      total += displayMode === "remaining" ? 100 - percent : percent;
+      count++;
+    }
+    return count > 0 ? total / count : 0;
+  }
+
+  /**
+   * Theme colour for a usage percentage.
+   */
+  _usageColor(percent) {
+    const displayMode = this._settings.get_string("display-mode");
+    if (displayMode === "remaining") {
+      if (percent < 10) return "#e01b24";
+      if (percent < 25) return "#ff7800";
+      if (percent < 50) return "#f6d32d";
+    } else {
+      if (percent > 90) return "#e01b24";
+      if (percent > 75) return "#ff7800";
+      if (percent > 50) return "#f6d32d";
+    }
+    return "#3584e4";
   }
 
   /**
@@ -603,7 +893,7 @@ export default class CodexBarExtension extends Extension {
 
       let text;
       if (!entry) text = "…";
-      else if (entry.error) text = "!";
+      else if (entry.error && !entry.data) text = "!";
       else {
         const elapsed = (Date.now() - (entry.fetchedAt || Date.now())) / 1000;
         text = formatPanelText(entry.data?.usage, displayMode, elapsed, _) || "–";
@@ -615,6 +905,117 @@ export default class CodexBarExtension extends Extension {
       );
       this._panelTextBox.add_child(segment);
     });
+  }
+
+  /**
+   * Footer links for the active provider and the project.
+   */
+  _buildFooter() {
+    if (!this._footerSection) return;
+
+    const open = (uri) => () => {
+      try {
+        Gio.AppInfo.launch_default_for_uri(uri, null);
+      } catch (e) {
+        console.error(`[CodexBar] could not open ${uri}: ${e}`);
+      }
+      this._indicator?.menu.close();
+    };
+    const add = (label, iconName, onActivate) => {
+      const item = new PopupMenu.PopupMenuItem(label);
+      if (iconName) {
+        item.add_child(
+          new St.Icon({
+            icon_name: iconName,
+            style_class: "popup-menu-icon",
+          }),
+        );
+      }
+      item.connect("activate", onActivate);
+      this._footerSection.addMenuItem(item);
+    };
+    const providerId = () =>
+      this._providers?.[this._activeProviderIndex]?.id || "";
+
+    add(_("Add Account..."), "list-add-symbolic", open(ADD_ACCOUNT_URL));
+    add(_("Usage Dashboard"), "view-list-symbolic", () =>
+      open(usageUrl(providerId()))(),
+    );
+    add(_("Status Page"), "network-transmit-receive-symbolic", () =>
+      open(statusUrl(providerId()))(),
+    );
+    add(_("Refresh Now"), "view-refresh-symbolic", () => {
+      this._indicator?.menu.close();
+      this._requestRefresh();
+    });
+
+    this._footerSection.addMenuItem(
+      new PopupMenu.PopupSeparatorMenuItem(),
+    );
+    add(_("About CodexBar"), "help-about-symbolic", () => {
+      this._indicator?.menu.close();
+      this._showAbout();
+    });
+  }
+
+  /**
+   * About dialog with project and licence links.
+   */
+  _showAbout() {
+    if (this._aboutDialog) return;
+
+    const name = this.metadata?.name || "CodexBar";
+    const version =
+      this.metadata?.["version-name"] || this.metadata?.version || "";
+    const dialog = new ModalDialog({
+      shellReactive: true,
+      shouldFadeIn: false,
+      shouldFadeOut: false,
+    });
+
+    const text = new St.Label({
+      text:
+        `${name}${version ? ` — ${_("Version")} ${version}` : ""}\n\n` +
+        _(
+          "AI provider usage in the GNOME panel.\nBased on CodexBar by @steipete. MIT licence.",
+        ),
+    });
+    text.clutter_text.line_wrap = true;
+    dialog.contentLayout.add_child(text);
+
+    for (const [label, url] of [
+      [_("This extension"), EXTENSION_REPO_URL],
+      [_("codexbar CLI"), CLI_REPO_URL],
+      [_("Upstream on extensions.gnome.org"), EGO_URL],
+      [_("License"), LICENSE_URL],
+    ]) {
+      const link = new St.Button({ label, style_class: "shell-link" });
+      link.connect("clicked", () => {
+        try {
+          Gio.AppInfo.launch_default_for_uri(url, null);
+          dialog.close();
+        } catch (e) {
+          console.error(`[CodexBar] could not open ${url}: ${e}`);
+        }
+      });
+      dialog.contentLayout.add_child(link);
+    }
+
+    dialog.setButtons([
+      {
+        label: _("Close"),
+        action: () => dialog.close(),
+        key: Clutter.KEY_Escape,
+      },
+    ]);
+    this._aboutDialog = dialog;
+    dialog.connect("destroy", () => {
+      if (this._aboutDialog === dialog) this._aboutDialog = null;
+    });
+    if (!dialog.open()) {
+      this._aboutDialog = null;
+      dialog.destroy();
+    }
   }
 
   /**
@@ -658,6 +1059,7 @@ export default class CodexBarExtension extends Extension {
     this._updatePanel();
     this._tabsContainer.destroy_all_children();
     this._contentBox.destroy_all_children();
+    this._historySection?.removeAll();
 
     const displayMode = this._settings.get_string("display-mode");
     const firstRun = this._settings.get_boolean("first-run");
@@ -670,74 +1072,77 @@ export default class CodexBarExtension extends Extension {
       return;
     }
 
-    let totalPercent = 0;
-    let tierCount = 0;
-
     const activeData = this._providersData[this._activeProviderIndex];
     // A tier with usedPercent:0 and no windowSeconds isn't a real usage window
-    // (e.g. OpenRouter's balance placeholder) - derive a meaningful percent from
-    // the Credits detail section instead, or drop the tier if none is available.
-    const creditsPercent = deriveCreditsPercent(
-      normalizeDetailSections(activeData?.data?.usage?.details),
-    );
+    // (e.g. OpenRouter's balance placeholder), so _usagePercent() derives a
+    // meaningful percent from Credits instead.
     const isDegenerateTier = (tierData) =>
       !!tierData &&
       !tierData.windowSeconds &&
       tierData.usedPercent === 0 &&
       !tierData.resetDescription;
+    const creditsPercent = deriveCreditsPercent(
+      normalizeDetailSections(activeData?.data?.usage?.details),
+    );
 
-    if (activeData && activeData.data && activeData.data.usage) {
-      const usage = activeData.data.usage;
-      const tiers = ["primary", "secondary", "tertiary", "quaternary"];
-
-      tiers.forEach((tier) => {
-        if (usage[tier] && usage[tier].usedPercent !== undefined) {
-          if (isDegenerateTier(usage[tier]) && creditsPercent === null) return;
-          let p = isDegenerateTier(usage[tier])
-            ? creditsPercent
-            : this._normalizePercent(usage[tier].usedPercent);
-          totalPercent += displayMode === "remaining" ? 100 - p : p;
-          tierCount++;
-        }
-      });
-
-      if (tierCount === 0 && usage.providerCost && usage.providerCost.limit > 0) {
-        let p = (usage.providerCost.used / usage.providerCost.limit) * 100;
-        totalPercent += displayMode === "remaining" ? 100 - p : p;
-        tierCount++;
-      }
-    }
-
-    let activePercent = tierCount > 0 ? totalPercent / tierCount : 0;
-    this._activePercent = activePercent;
+    // The panel tracks one provider, not whichever tab happens to be open.
+    const primaryProvider = this._primaryProvider();
+    const primaryIndex = primaryProvider
+      ? this._providers.indexOf(primaryProvider)
+      : -1;
+    const panelPercent =
+      primaryIndex >= 0 ? this._usagePercent(this._providersData[primaryIndex]) : 0;
+    this._activePercent = panelPercent;
 
     const showLogos = this._settings.get_boolean("show-logos");
 
     this._providers.forEach((provider, index) => {
+      const percent = this._usagePercent(this._providersData[index]);
+      const hasData = !!this._providersData[index]?.data;
+      const entryFailed = !!this._providersData[index]?.error;
+
       let btn = new St.Button({
         style_class: "codexbar-tab",
         can_focus: true,
+        accessible_name: provider.name || _("Unknown"),
       });
 
-      let btnBin = new St.BoxLayout({
+      const column = new St.BoxLayout({
+        orientation: Clutter.Orientation.VERTICAL,
+        x_align: Clutter.ActorAlign.CENTER,
+      });
+      const top = new St.BoxLayout({
         orientation: Clutter.Orientation.HORIZONTAL,
+        x_align: Clutter.ActorAlign.CENTER,
         y_align: Clutter.ActorAlign.CENTER,
       });
-      btn.set_child(btnBin);
 
       if (showLogos) {
         const logoIcon = this._getProviderLogo(provider.id, provider.name);
-        if (logoIcon) {
-          btnBin.add_child(logoIcon);
-        }
+        if (logoIcon) top.add_child(logoIcon);
       }
 
-      btnBin.add_child(
+      top.add_child(
         new St.Label({
           text: provider.name || _("Unknown"),
           y_align: Clutter.ActorAlign.CENTER,
         }),
       );
+      column.add_child(top);
+
+      // Each tab carries its own load, so a provider nearing its limit is
+      // visible without switching to it.
+      const track = new St.BoxLayout({ style_class: "codexbar-tab-track" });
+      if (hasData && !entryFailed) {
+        track.add_child(
+          new St.Widget({
+            style_class: "codexbar-tab-fill",
+            style: `width: ${Math.max(1, Math.round((TAB_TRACK_WIDTH * percent) / 100))}px; background-color: ${this._usageColor(percent)};`,
+          }),
+        );
+      }
+      column.add_child(track);
+      btn.set_child(column);
 
       if (index === this._activeProviderIndex) {
         btn.add_style_class_name("codexbar-tab-active");
@@ -747,6 +1152,18 @@ export default class CodexBarExtension extends Extension {
         this._updateUI();
       });
       this._tabsContainer.add_child(btn);
+
+      if (
+        provider.id === primaryProvider?.id &&
+        this._providers.length > 1
+      ) {
+        this._tabsContainer.add_child(
+          new St.Widget({
+            style_class: "codexbar-tab-primary-dot",
+            y_align: Clutter.ActorAlign.CENTER,
+          }),
+        );
+      }
     });
 
     if (this._iconFill) {
@@ -756,23 +1173,13 @@ export default class CodexBarExtension extends Extension {
         1,
         Math.min(
           totalFillWidth,
-          Math.round((activePercent / 100) * totalFillWidth),
+          Math.round((panelPercent / 100) * totalFillWidth),
         ),
       );
-
-      let color = "#3584e4"; // Adwaita Blue
-      if (displayMode === "remaining") {
-        if (activePercent < 10) color = "#e01b24";
-        else if (activePercent < 25) color = "#ff7800";
-        else if (activePercent < 50) color = "#f6d32d";
-      } else {
-        if (activePercent > 90) color = "#e01b24";
-        else if (activePercent > 75) color = "#ff7800";
-        else if (activePercent > 50) color = "#f6d32d";
-      }
-
       this._iconFill.set_width(fillWidth);
-      this._iconFill.set_style(`background-color: ${color};`);
+      this._iconFill.set_style(
+        `background-color: ${this._usageColor(panelPercent)};`,
+      );
     }
 
     if (this._providers.length === 0) {
@@ -790,7 +1197,7 @@ export default class CodexBarExtension extends Extension {
       return;
     }
 
-    if (activeData.error) {
+    if (activeData.error && !activeData.data) {
       let errorBox = new St.BoxLayout({
         orientation: Clutter.Orientation.VERTICAL,
         x_expand: true,
@@ -884,7 +1291,19 @@ export default class CodexBarExtension extends Extension {
       this._contentBox.add_child(accountBox);
     }
 
+    if (activeData.stale) {
+      this._contentBox.add_child(
+        subtitleLabel({ text: _("Showing last known values") }),
+      );
+      if (activeData.staleError) {
+        const staleNote = subtitleLabel({ text: activeData.staleError });
+        staleNote.clutter_text.line_wrap = true;
+        this._contentBox.add_child(staleNote);
+      }
+    }
+
     this._renderDetailSections(usage);
+    this._renderCost(activeProvider.id);
 
     const tiers = ["primary", "secondary", "tertiary", "quaternary"];
     const discoveredLabels = activeData.labels || [];
@@ -929,10 +1348,9 @@ export default class CodexBarExtension extends Extension {
           }),
         );
 
-        let progressContainer = new St.BoxLayout({
-          style_class: "codexbar-progress-container",
-        });
+        const fullWidth = 290;
         let p = this._normalizePercent(tierData.usedPercent);
+        const pace = calculateUsagePace(tierData);
 
         let percent = displayMode === "remaining" ? 100 - p : p;
         let labelText =
@@ -951,14 +1369,48 @@ export default class CodexBarExtension extends Extension {
           else if (percent > 50) color = "#f6d32d";
         }
 
-        const fullWidth = 290;
         const barWidth = Math.max(1, Math.round((percent / 100) * fullWidth));
 
+        // A plain St.Widget track (not a BoxLayout) lets the fill and the pace
+        // tick overlap at explicit x positions instead of sitting side by side.
+        let progressContainer = new St.Widget({
+          style_class: "codexbar-progress-container",
+          width: fullWidth,
+          height: 6,
+        });
         let progressBar = new St.Widget({
           style_class: "codexbar-progress-bar",
+          x: 0,
+          width: barWidth,
           style: `width: ${barWidth}px; background-color: ${color};`,
         });
         progressContainer.add_child(progressBar);
+
+        if (showPacing && entry.showPace && pace) {
+          const expected = Math.max(
+            0,
+            Math.min(100, pace.expectedUsedPercent),
+          );
+          const expectedDisplay =
+            displayMode === "remaining" ? 100 - expected : expected;
+          const markerX = Math.max(
+            0,
+            Math.min(
+              fullWidth - 2,
+              Math.round((expectedDisplay / 100) * fullWidth) - 1,
+            ),
+          );
+          progressContainer.add_child(
+            new St.Widget({
+              style_class: "codexbar-pace-marker",
+              x: markerX,
+              y: -2,
+              width: 2,
+              height: 10,
+            }),
+          );
+        }
+
         this._contentBox.add_child(progressContainer);
 
         const statsBox = new St.BoxLayout({
@@ -988,34 +1440,31 @@ export default class CodexBarExtension extends Extension {
 
         this._contentBox.add_child(statsBox);
 
-        if (showPacing && entry.showPace && tierData.windowSeconds >= 7 * 24 * 3600) {
-          const pace = calculateUsagePace(tierData);
-          if (pace) {
-            const roundedReserve = Math.round(pace.reservePercent);
-            const paceBox = new St.BoxLayout({
-              orientation: Clutter.Orientation.HORIZONTAL,
+        if (showPacing && entry.showPace && tierData.windowSeconds >= 7 * 24 * 3600 && pace) {
+          const roundedReserve = Math.round(pace.reservePercent);
+          const paceBox = new St.BoxLayout({
+            orientation: Clutter.Orientation.HORIZONTAL,
+            x_expand: true,
+          });
+          paceBox.add_child(
+            subtitleLabel({
+              text:
+                roundedReserve >= 0
+                  ? _("%d%% in reserve").format(roundedReserve)
+                  : _("%d%% over pace").format(Math.abs(roundedReserve)),
+            }),
+          );
+          paceBox.add_child(
+            subtitleLabel({
+              text:
+                roundedReserve >= 0
+                  ? _("Lasts until reset")
+                  : _("May run out before reset"),
+              x_align: Clutter.ActorAlign.END,
               x_expand: true,
-            });
-            paceBox.add_child(
-              subtitleLabel({
-                text:
-                  roundedReserve >= 0
-                    ? _("%d%% in reserve").format(roundedReserve)
-                    : _("%d%% over pace").format(Math.abs(roundedReserve)),
-              }),
-            );
-            paceBox.add_child(
-              subtitleLabel({
-                text:
-                  roundedReserve >= 0
-                    ? _("Lasts until reset")
-                    : _("May run out before reset"),
-                x_align: Clutter.ActorAlign.END,
-                x_expand: true,
-              }),
-            );
-            this._contentBox.add_child(paceBox);
-          }
+            }),
+          );
+          this._contentBox.add_child(paceBox);
         }
 
         let sep = new St.Widget({
@@ -1126,6 +1575,64 @@ export default class CodexBarExtension extends Extension {
   }
 
   /**
+   * Local spend/token estimate from `codexbar cost`, when the CLI reports it.
+   * @param {string} providerId
+   */
+  _renderCost(providerId) {
+    if (!this._settings.get_boolean("show-provider-details")) return;
+    const cost = this._cost?.providers?.find((entry) => entry.id === providerId);
+    if (!cost) return;
+
+    const hasValues = [
+      cost.todayCost,
+      cost.todayTokens,
+      cost.periodCost,
+      cost.periodTokens,
+      cost.cost,
+      cost.tokens,
+    ].some((value) => value > 0);
+    if (!hasValues) return;
+
+    const box = new St.BoxLayout({
+      orientation: Clutter.Orientation.VERTICAL,
+      style_class: "codexbar-cost-container",
+      x_expand: true,
+    });
+    box.add_child(
+      new St.Label({
+        text: _("Local cost estimate"),
+        style_class: "codexbar-cost-title",
+        x_align: Clutter.ActorAlign.CENTER,
+      }),
+    );
+
+    const line = (label, money, tokens) => {
+      const parts = [];
+      if (money > 0) parts.push(formatMoney(money, cost.currency));
+      if (tokens > 0)
+        parts.push(_("%s tokens").format(formatTokens(tokens)));
+      if (parts.length === 0) return;
+      const row = new St.BoxLayout({ x_expand: true });
+      const text = new St.Label({
+        text: `${label}: ${parts.join(" · ")}`,
+        style_class: "codexbar-detail-note",
+        x_expand: true,
+      });
+      text.opacity = SECONDARY_TEXT_OPACITY;
+      row.add_child(text);
+      box.add_child(row);
+    };
+
+    line(_("Today"), cost.todayCost, cost.todayTokens);
+    if (cost.periodCost > 0 || cost.periodTokens > 0)
+      line(cost.periodLabel || _("Last 30 days"), cost.periodCost, cost.periodTokens);
+    if (cost.cost > 0 || cost.tokens > 0)
+      line(_("All time"), cost.cost, cost.tokens);
+
+    this._contentBox.add_child(box);
+  }
+
+  /**
    * Render provider-supplied detail sections (codexbar `usage.details`).
    * @param {object} usage
    */
@@ -1140,6 +1647,7 @@ export default class CodexBarExtension extends Extension {
       style_class: "codexbar-details-section",
       x_expand: true,
     });
+    let hasRows = false;
 
     sections.forEach((section) => {
       const groupBox = new St.BoxLayout({
@@ -1194,10 +1702,97 @@ export default class CodexBarExtension extends Extension {
         }
       });
 
-      detailsBox.add_child(groupBox);
+      if (section.rows.length) {
+        hasRows = true;
+        detailsBox.add_child(groupBox);
+      }
+
+      if (section.chart) {
+        const item = new PopupMenu.PopupSubMenuMenuItem(
+          localizeDetail(
+            section.chart.title || section.title || _("Chart"),
+            _,
+          ),
+        );
+        this._addChartToMenu(
+          item.menu,
+          section.chart.points,
+          section.chart.unit,
+        );
+        this._historySection?.addMenuItem(item);
+      }
     });
 
-    this._contentBox.add_child(detailsBox);
+    if (hasRows) this._contentBox.add_child(detailsBox);
+  }
+
+  /**
+   * Draw a small bar chart inside a submenu. Each bar is focusable and reports
+   * its label and value, which keeps the chart usable without a pointer.
+   * @param {object} menu PopupMenu section
+   * @param {Array<{label: string, value: number}>} points
+   * @param {string} unit Optional chart unit, e.g. USD or %
+   */
+  _addChartToMenu(menu, points, unit = "") {
+    if (!Array.isArray(points) || points.length === 0) return;
+
+    const format = (value) => {
+      const number = Number(value);
+      if (!Number.isFinite(number)) return "";
+      if (unit === "USD") return `$${number.toFixed(2)}`;
+      if (unit === "%") return `${number.toFixed(1)}%`;
+      return number.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    };
+
+    const detail = subtitleLabel({
+      text: _("Hover or focus a bar for details"),
+    });
+    menu.box.add_child(detail);
+
+    const maximum = Math.max(
+      0,
+      ...points.map((point) => Math.max(0, Number(point.value) || 0)),
+    );
+    const row = new St.BoxLayout({
+      style_class: "codexbar-chart-row",
+      x_expand: true,
+    });
+    if (row.layout_manager) row.layout_manager.homogeneous = true;
+
+    points.forEach((point) => {
+      const description = `${point.label}: ${format(point.value)}`;
+      const button = new St.Button({
+        can_focus: true,
+        x_expand: true,
+        style_class: "codexbar-chart-day",
+        accessible_name: description,
+      });
+      const height = maximum
+        ? Math.max(
+            2,
+            Math.round(
+              (48 * Math.max(0, Number(point.value) || 0)) / maximum,
+            ),
+          )
+        : 2;
+      button.set_child(
+        new St.Widget({
+          style_class: "codexbar-chart-bar",
+          x_expand: true,
+          x_align: Clutter.ActorAlign.FILL,
+          height,
+          y_align: Clutter.ActorAlign.END,
+        }),
+      );
+      const show = () => {
+        detail.text = description;
+      };
+      button.connect("clicked", show);
+      button.connect("enter-event", show);
+      button.connect("key-focus-in", show);
+      row.add_child(button);
+    });
+    menu.box.add_child(row);
   }
 
   /**
@@ -1526,7 +2121,7 @@ export default class CodexBarExtension extends Extension {
     });
     closeBtn.connect("clicked", () => {
       this._settings.set_boolean("first-run", false);
-      this._refreshData();
+      this._requestRefresh();
     });
     btnBox.add_child(closeBtn);
     box.add_child(btnBox);

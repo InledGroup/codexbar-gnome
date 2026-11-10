@@ -21,7 +21,7 @@ export class CliSubprocessFetcher extends UsageFetcher {
     /**
      * Run the command, parse the output, and resolve window labels.
      */
-    async fetch(providerCommand, cancellable = null) {
+    async fetch(providerCommand, cancellable = null, { all = false } = {}) {
         if (!providerCommand) {
             throw new UsageApiError("No command configured / No hay ningún comando configurado.");
         }
@@ -124,12 +124,15 @@ export class CliSubprocessFetcher extends UsageFetcher {
             try {
                 const parsed = JSON.parse(trimmedStdout);
                 const rawData = Array.isArray(parsed) ? parsed[0] : parsed;
-                let labels = extractWindowLabels(rawData);
-                if (labels.length === 0) {
+                // Cost payloads are arrays of per-provider entries and have no
+                // window labels, so do not spend a second subprocess on them.
+                let labels = all ? [] : extractWindowLabels(rawData);
+                if (!all && labels.length === 0) {
                     labels = await this._discoverLabels(argv, env, cancellable);
                 }
                 return {
                     data: rawData,
+                    rawData: parsed,
                     labels: labels,
                     command: finalCommand
                 };

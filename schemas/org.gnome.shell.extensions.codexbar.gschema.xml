@@ -35,6 +35,16 @@
       <default>true</default>
       <summary>Whether to show weekly usage pacing details</summary>
     </key>
+    <key name="primary-provider" type="s">
+      <default>''</default>
+      <summary>Provider whose usage fills the panel icon</summary>
+      <description>Provider id, or an empty string to use the first enabled provider.</description>
+    </key>
+    <key name="dismissed-providers" type="s">
+      <default>'[]'</default>
+      <summary>Provider ids removed from the discovered list</summary>
+      <description>JSON array of codexbar provider ids that should not be added back by the CLI provider scan.</description>
+    </key>
     <key name="show-provider-details" type="b">
       <default>true</default>
       <summary>Whether to show provider-supplied detail sections</summary>

@@ -12,6 +12,10 @@ gnome-extensions pack \
     --extra-source=prefs.js \
     --extra-source=usageApi.js \
     --extra-source=providerSources.js \
+    --extra-source=providerCatalog.js \
+    --extra-source=providerDiscovery.js \
+    --extra-source=links.js \
+    --extra-source=cost.js \
     --extra-source=localize.js \
     --extra-source=stylesheet.css \
     --extra-source=secret.js \

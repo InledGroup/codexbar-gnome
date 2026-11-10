@@ -21,6 +21,15 @@ import {
   buildCliCommand,
   parseGeneratedCommand,
 } from "./providerSources.js";
+import {
+  mergeDiscoveredProviders,
+  parseConfigProviders,
+} from "./providerCatalog.js";
+import {
+  formatMoney,
+  formatTokens,
+  parseCostPayload,
+} from "./cost.js";
 
 await import('./test_opencode.js');
 
@@ -596,12 +605,19 @@ if (
 }
 console.log("✓ normalizeDetailSections produces the correct sections and rows");
 
-if (!openRouterSections[1].hasChart || "chart" in openRouterSections[1]) {
+if (!openRouterSections[1].hasChart || !openRouterSections[1].chart) {
+  throw new Error("Expected the API key section to keep a sanitized chart");
+}
+if (openRouterSections[1].chart.points.length !== 3 ||
+    openRouterSections[1].chart.points[1].value !== 0.45) {
   throw new Error(
-    "Expected the API key section to record hasChart:true without leaking the raw chart",
+    `Expected the three numeric chart points to be preserved, got ${JSON.stringify(openRouterSections[1].chart)}`,
   );
 }
-console.log("✓ chart is detected via hasChart but not leaked into the sanitized shape");
+if ("unit" in openRouterSections[1].chart && openRouterSections[1].chart.unit !== "USD") {
+  throw new Error("Expected the chart unit to survive sanitization");
+}
+console.log("✓ charts are sanitized into labelled, numeric points");
 
 if (
   openRouterSections[2].rows[0].secondaryValue !==
@@ -793,6 +809,101 @@ if (adoptCustomProviders(null, KNOWN_PROVIDERS).length !== 0) {
   throw new Error("Expected adoptCustomProviders(null) to return an empty list");
 }
 console.log("✓ adoptCustomProviders defends against a malformed provider list");
+
+// --- CLI provider discovery ------------------------------------------------
+
+const rawProviders = JSON.stringify([
+  { provider: "codex", displayName: "Codex", enabled: true },
+  { provider: "claude", displayName: "Claude", enabled: false },
+  { provider: "opencodego", displayName: "OpenCode Go", enabled: true },
+  { provider: "bad id", displayName: "Bad", enabled: true },
+  { provider: "codex", displayName: "Duplicate", enabled: true },
+]);
+const discovered = parseConfigProviders(rawProviders);
+if (discovered.map((p) => p.id).join(",") !== "codex,opencodego") {
+  throw new Error(`Expected only enabled, valid, unique providers, got ${JSON.stringify(discovered)}`);
+}
+if (parseConfigProviders("not json").length !== 0 || parseConfigProviders(null).length !== 0) {
+  throw new Error("Expected malformed discovery payloads to return an empty list");
+}
+console.log("✓ parseConfigProviders keeps enabled, unique, valid ids only");
+
+const savedBefore = [
+  { id: "codex", name: "Codex", command: "codexbar --provider codex --source cli --format json", useApi: false },
+];
+const merged = mergeDiscoveredProviders(
+  savedBefore,
+  discovered,
+  KNOWN_PROVIDERS,
+  ["opencodego"],
+);
+if (merged.length !== 1 || merged[0].command !== savedBefore[0].command) {
+  throw new Error("Expected discovery to preserve saved providers and skip dismissed ids");
+}
+const mergedWithoutDismissal = mergeDiscoveredProviders(
+  savedBefore,
+  discovered,
+  KNOWN_PROVIDERS,
+  [],
+);
+if (mergedWithoutDismissal.length !== 2 ||
+    mergedWithoutDismissal[1].id !== "opencodego" ||
+    mergedWithoutDismissal[1].command !== "codexbar --provider opencodego --source auto --format json" ||
+    !mergedWithoutDismissal[1].autoDiscovered) {
+  throw new Error(`Unexpected discovered provider merge: ${JSON.stringify(mergedWithoutDismissal)}`);
+}
+if (savedBefore.length !== 1) {
+  throw new Error("mergeDiscoveredProviders must not mutate its input");
+}
+const directMerged = mergeDiscoveredProviders(
+  [],
+  [{ id: "codex", name: "Codex" }],
+  [{ id: "codex", name: "Codex", defaultCommand: "", supportsDirectApi: true }],
+  [],
+);
+if (directMerged[0].useApi !== true || directMerged[0].command !== "") {
+  throw new Error(
+    `Expected a Direct API provider for Codex, got ${JSON.stringify(directMerged[0])}`,
+  );
+}
+console.log("✓ mergeDiscoveredProviders prefers the direct adapter where the CLI has no source");
+console.log("✓ mergeDiscoveredProviders adds new ids without rewriting saved rows");
+
+const cost = parseCostPayload([
+  {
+    provider: "opencode",
+    currencyCode: "USD",
+    totals: { totalCost: 1.5, totalTokens: 12000 },
+    sessionCostUSD: 0.25,
+    sessionTokens: 2000,
+    last30DaysCostUSD: 1.25,
+    last30DaysTokens: 10000,
+    historyLabel: "Last 30 days",
+  },
+  { provider: "codex", error: { message: "unsupported" } },
+  {
+    provider: "zero",
+    totals: { totalCost: 0, totalTokens: 0 },
+    sessionCostUSD: 0,
+    sessionTokens: 0,
+  },
+]);
+if (cost?.providers?.length !== 1) {
+  throw new Error(`Unexpected cost providers: ${JSON.stringify(cost)}`);
+}
+const opencodeCost = cost.providers[0];
+if (
+  opencodeCost.todayCost !== 0.25 ||
+  opencodeCost.periodCost !== 1.25 ||
+  opencodeCost.cost !== 1.5 ||
+  opencodeCost.periodTokens !== 10000
+) {
+  throw new Error(`Unexpected cost entry: ${JSON.stringify(opencodeCost)}`);
+}
+if (formatMoney(1.5) !== "$1.50" || formatTokens(12000) !== "12K") {
+  throw new Error("Cost formatters changed unexpectedly");
+}
+console.log("✓ cost payload parser keeps providers with spend or tokens");
 
 // Ollama Cloud monthly credit-pool parser test (transparent per-token pricing)
 const ollamaCreditHtml = `

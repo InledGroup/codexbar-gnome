@@ -161,7 +161,7 @@ export const formatResetDescription = (seconds, windowSeconds, now = new Date())
  * Sanitize the provider-supplied `details` array from the codexbar CLI into a
  * flat, render-safe shape. Charts are intentionally dropped (not rendered yet).
  * @param {unknown} details
- * @returns {Array<{title: string, rows: Array<{label: string, value: string, secondaryValue: string}>, hasChart: boolean}>}
+ * @returns {Array<{title: string, rows: Array<{label: string, value: string, secondaryValue: string}>, chart: object|null, hasChart: boolean}>}
  */
 export function normalizeDetailSections(details) {
     if (!Array.isArray(details)) return [];
@@ -188,12 +188,50 @@ export function normalizeDetailSections(details) {
             });
         }
 
-        if (rows.length === 0) return;   // chart-only / empty -> drop section
+        // Charts are rendered as submenus. Keep only the bounded, numeric
+        // shape the UI understands; provider text must not reach the shell
+        // unvalidated.
+        let chart = null;
+        const rawChart = section.chart;
+        if (
+            rawChart &&
+            typeof rawChart === 'object' &&
+            rawChart.kind === 'bars' &&
+            Array.isArray(rawChart.points) &&
+            rawChart.points.length > 0 &&
+            rawChart.points.length <= 120
+        ) {
+            const points = [];
+            rawChart.points.forEach((point, index) => {
+                if (typeof point === 'number') {
+                    if (!Number.isFinite(point) || point < 0) return;
+                    points.push({ label: String(index + 1), value: point });
+                    return;
+                }
+                if (!point || typeof point !== 'object') return;
+                const value = Number(point.value);
+                if (!Number.isFinite(value) || value < 0) return;
+                points.push({
+                    label: toText(point.label).slice(0, 100) || String(index + 1),
+                    value,
+                });
+            });
+            if (points.length > 0) {
+                chart = {
+                    title: toText(rawChart.title) || toText(section.title),
+                    unit: toText(rawChart.unit),
+                    points,
+                };
+            }
+        }
+
+        if (rows.length === 0 && !chart) return;
 
         sections.push({
             title: toText(section.title),
             rows,
-            hasChart: Boolean(section.chart && typeof section.chart === 'object'),
+            chart,
+            hasChart: Boolean(chart),
         });
     });
 
@@ -350,6 +388,19 @@ export class UsageApiClient {
      */
     async fetchCliSummary(command, cancellable = null) {
         return this._cliFetcher.fetch(command, cancellable);
+    }
+
+    /**
+     * Fetch local cost data for all providers. Returns the raw array because
+     * `codexbar cost` reports one entry per provider.
+     */
+    async fetchCost(cancellable = null) {
+        const result = await this._cliFetcher.fetch(
+            "codexbar cost --provider all --format json",
+            cancellable,
+            { all: true },
+        );
+        return result.rawData;
     }
 
     /**

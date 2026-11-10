@@ -22,6 +22,8 @@ import {
   resolveProviderRows,
   parseGeneratedCommand,
 } from "./providerSources.js";
+import { mergeDiscoveredProviders } from "./providerCatalog.js";
+import { discoverEnabledProviders } from "./providerDiscovery.js";
 
 /**
  * Human label for a source. Looked up lazily so gettext runs after the
@@ -461,6 +463,30 @@ const CodexBarPrefsPage = GObject.registerClass(
       }
       activeProviders = adopted;
 
+      // Providers removed from this page are remembered so the next CLI scan
+      // does not add them back. A provider the user re-enables is forgotten.
+      const readDismissed = () => {
+        try {
+          const value = JSON.parse(this._settings.get_string("dismissed-providers"));
+          return Array.isArray(value)
+            ? value.filter((id) => typeof id === "string")
+            : [];
+        } catch (e) {
+          return [];
+        }
+      };
+      let dismissed = readDismissed();
+      const rememberDismissed = (id, remember) => {
+        const next = new Set(dismissed);
+        if (remember) next.add(id);
+        else next.delete(id);
+        dismissed = [...next];
+        this._settings.set_string(
+          "dismissed-providers",
+          JSON.stringify(dismissed),
+        );
+      };
+
       const saveProviders = async () => {
         const newProviders = [];
         for (const row of this._providerRows) {
@@ -474,6 +500,7 @@ const CodexBarPrefsPage = GObject.registerClass(
               ...(row._panelCheck.active ? { showInPanel: true } : {}),
               ...(row._workspaceEntry?.get_text().trim()
                 ? { workspaceId: row._workspaceEntry.get_text().trim() } : {}),
+              ...(row._autoDiscovered ? { autoDiscovered: true } : {}),
             });
 
             if (row._useApi) {
@@ -484,7 +511,9 @@ const CodexBarPrefsPage = GObject.registerClass(
             }
           }
         }
+        activeProviders = newProviders;
         this._settings.set_string("providers", JSON.stringify(newProviders));
+        this._refreshPrimaryRow?.();
       };
 
       const createProviderRow = (info, activeData = null) => {
@@ -514,6 +543,7 @@ const CodexBarPrefsPage = GObject.registerClass(
 
         row._id = activeData ? activeData.id : info.id;
         row._name = info.name;
+        row._autoDiscovered = !!activeData?.autoDiscovered;
         const isOpenCode = info.id === "opencode" || info.id === "opencodego";
 
         // Which sources this row offers, and which one it starts on. Only
@@ -549,6 +579,10 @@ const CodexBarPrefsPage = GObject.registerClass(
         enabledSwitch.connect("notify::active", () => {
           row.set_subtitle(enabledSwitch.active ? _("Enabled") : _("Disabled"));
           row.expanded = enabledSwitch.active;
+          // Remember every deliberate disable, not just discovered rows: an
+          // enabled CLI provider must not be added back at the next scan if the
+          // user turned it off here.
+          rememberDismissed(row._id, !enabledSwitch.active);
           saveProviders();
         });
         row.add_suffix(enabledSwitch);
@@ -582,6 +616,7 @@ const CodexBarPrefsPage = GObject.registerClass(
           row._useApi = source === DIRECT_API;
           apiBox.visible = row._useApi;
           cliBox.visible = !row._useApi;
+          row._applySource = applySource;
 
           if (rewriteCommand && !row._useApi) {
             const current = row._commandEntry.get_text();
@@ -791,6 +826,7 @@ const CodexBarPrefsPage = GObject.registerClass(
           deleteBtn.connect("clicked", () => {
             group.remove(row);
             this._providerRows = this._providerRows.filter((r) => r !== row);
+            if (row._autoDiscovered) rememberDismissed(row._id, true);
             saveProviders();
           });
           box.append(deleteBtn);
@@ -801,11 +837,46 @@ const CodexBarPrefsPage = GObject.registerClass(
         return row;
       };
 
-      resolveProviderRows(activeProviders, PREDEFINED_PROVIDERS).forEach(({info, activeData}) => {
-        group.add(createProviderRow(info, activeData));
-      });
+      // Rows are appended next to the existing ones instead of rebuilding the
+      // group, so a CLI scan that finishes while the user is editing cannot
+      // destroy their input.
+      let addBtnRow = null;
+      const addProviderRows = (providers) => {
+        const present = new Set(this._providerRows.map((row) => row._id));
+        resolveProviderRows(providers, PREDEFINED_PROVIDERS).forEach(
+          ({ info, activeData }) => {
+            if (present.has(info.id)) {
+              // A predefined provider already has a disabled row on the page.
+              // Enable that row instead of adding a duplicate.
+              const existing = this._providerRows.find(
+                (row) => row._id === info.id,
+              );
+              if (existing && activeData && !existing._enabledSwitch.active) {
+                existing._autoDiscovered = !!activeData.autoDiscovered;
+                existing._source = activeData.source || existing._source;
+                existing._useApi = !!activeData.useApi;
+                if (!existing._useApi && activeData.command) {
+                  existing._commandEntry.set_text(activeData.command);
+                }
+                existing._applySource?.(existing._source, {
+                  rewriteCommand: false,
+                });
+                existing._enabledSwitch.active = true;
+              }
+              return;
+            }
+            const row = createProviderRow(info, activeData);
+            if (addBtnRow) group.remove(addBtnRow);
+            group.add(row);
+            if (addBtnRow) group.add(addBtnRow);
+            present.add(info.id);
+          },
+        );
+      };
 
-      const addBtnRow = new Adw.ActionRow({
+      addProviderRows(activeProviders);
+
+      addBtnRow = new Adw.ActionRow({
         title: _("Add Custom Provider"),
         subtitle: _("The extension should parse it correctly."),
       });
@@ -877,6 +948,93 @@ const CodexBarPrefsPage = GObject.registerClass(
 
       addBtnRow.add_suffix(addBtn);
       group.add(addBtnRow);
+
+      // Keep the CLI list in sync without touching existing rows. Runs on
+      // opening Preferences and from the refresh button below.
+      const syncRow = new Adw.ActionRow({
+        title: _("Scan codexbar for enabled providers"),
+        subtitle: _(
+          "Adds providers enabled in the CLI without changing the ones already configured",
+        ),
+      });
+      const syncBtn = new Gtk.Button({
+        icon_name: "view-refresh-symbolic",
+        valign: Gtk.Align.CENTER,
+        tooltip_text: _("Scan again"),
+      });
+      const syncSpinner = new Gtk.Spinner({
+        valign: Gtk.Align.CENTER,
+        visible: false,
+        tooltip_text: _("Scanning codexbar..."),
+      });
+      syncRow.add_suffix(syncBtn);
+      syncRow.add_suffix(syncSpinner);
+      group.add(syncRow);
+
+      let scanning = false;
+      const scanProviders = () => {
+        if (scanning) return;
+        scanning = true;
+        syncBtn.visible = false;
+        syncSpinner.visible = true;
+        syncSpinner.start();
+        const finish = () => {
+          scanning = false;
+          if (!this._settings) return;
+          syncSpinner.stop();
+          syncSpinner.visible = false;
+          syncBtn.visible = true;
+          syncBtn.sensitive = true;
+        };
+        discoverEnabledProviders((discovered) => {
+          try {
+            if (!this._settings) return;
+            const merged = mergeDiscoveredProviders(
+              activeProviders,
+              discovered,
+              PREDEFINED_PROVIDERS,
+              dismissed,
+            );
+            if (JSON.stringify(merged) !== JSON.stringify(activeProviders)) {
+              activeProviders = merged;
+              this._settings.set_string("providers", JSON.stringify(merged));
+              addProviderRows(merged);
+              this._refreshPrimaryRow?.();
+            }
+          } finally {
+            finish();
+          }
+        });
+      };
+      syncBtn.connect("clicked", scanProviders);
+
+      const primaryRow = new Adw.ComboRow({
+        title: _("Panel Provider"),
+        subtitle: _(
+          "Provider whose usage fills the panel icon; Automatic tracks the first enabled one",
+        ),
+      });
+      this._refreshPrimaryRow = () => {
+        const current = this._settings.get_string("primary-provider");
+        const ids = ["", ...activeProviders.map((provider) => provider.id)];
+        const names = [
+          _("Automatic"),
+          ...activeProviders.map((provider) => provider.name || provider.id),
+        ];
+        primaryRow._ids = ids;
+        primaryRow.model = new Gtk.StringList({ strings: names });
+        primaryRow.selected = Math.max(0, ids.indexOf(current));
+      };
+      primaryRow.connect("notify::selected", () => {
+        if (!primaryRow._ids) return;
+        const id = primaryRow._ids[primaryRow.selected] ?? "";
+        if (id !== this._settings.get_string("primary-provider"))
+          this._settings.set_string("primary-provider", id);
+      });
+      this._refreshPrimaryRow();
+      group.add(primaryRow);
+
+      scanProviders();
 
       return group;
     }

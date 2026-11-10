@@ -58,6 +58,35 @@
     -st-icon-style: symbolic;
 }
 
+/* Per-tab load underline. Mirrors TAB_TRACK_WIDTH in extension.js. */
+.codexbar-tab-track {
+    height: 3px;
+    width: 44px;
+    margin-top: 4px;
+    border-radius: 2px;
+    background-color: rgba(127, 127, 127, 0.25);
+}
+
+.codexbar-tab-fill {
+    height: 3px;
+    border-radius: 2px;
+}
+
+/* Marks the provider whose usage fills the panel icon. */
+.codexbar-tab-primary-dot {
+    width: 4px;
+    height: 4px;
+    margin-right: 5px;
+    border-radius: 2px;
+    background-color: rgba(127, 127, 127, 0.55);
+}
+
+.codexbar-refresh-spinner {
+    width: 16px;
+    text-align: center;
+    font-size: 14px;
+}
+
 .codexbar-usage-section {
     padding: 15px;
 }
@@ -85,6 +114,29 @@
 .codexbar-progress-bar {
     height: 6px;
     border-radius: 3px;
+}
+
+.codexbar-pace-marker {
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 1px;
+}
+
+.codexbar-chart-row {
+    width: 290px;
+    height: 52px;
+    spacing: 2px;
+    margin-top: 2px;
+    margin-bottom: 6px;
+}
+
+.codexbar-chart-day {
+    padding: 0;
+    border-radius: 2px;
+}
+
+.codexbar-chart-bar {
+    background-color: #3584e4;
+    border-radius: 2px;
 }
 
 .codexbar-reset-credits {

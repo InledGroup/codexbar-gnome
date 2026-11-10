@@ -71,7 +71,7 @@ mkdir -p ~/.local/bin && curl -fsSL https://raw.githubusercontent.com/InledGroup
 
 ## Installation
 
-### From EGO
+### From EGO (outdated. update coming soon)
 You can download it from the official GNOME store. It takes longer to be updated.
 [https://extensions.gnome.org/extension/9841/codexbar/](https://extensions.gnome.org/extension/9841/codexbar/)
 
@@ -179,6 +179,9 @@ under its MIT license (included in `media/logos/OpenCode-LICENSE.txt`). This
 extension remains based on the original InledGroup/codexbar-gnome project.
 
 
+## Credits  
+- Codexbar CLI by steipete
+- Some new features taken from this fork of this extension [lhw/codexbar-gnome](https://github.com/lhw/codexbar-gnome). Take a look at it :)
 
 ## License
 
