@@ -4,14 +4,16 @@
 # Replaces the codexbar-cookie-importer PyPI package.
 set -euo pipefail
 
-VERSION="2.0.0"
+VERSION="2.1.0"
 
 # --- Provider configs ---
 PROVIDER="codex"
+PROFILE=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --provider=*) PROVIDER="${1#--provider=}" ;;
     --provider) PROVIDER="${2:-codex}"; shift ;;
+    --profile) PROFILE="${2:?--profile requires a Cookies database path}"; shift ;;
     *) : ;;
   esac
   shift
@@ -32,6 +34,13 @@ case "$PROVIDER" in
     REQUIRED_COOKIE=""
     PRIORITY_COOKIES=("session" "auth" "token")
     TARGETS=("session" "auth" "token" "csrf" "intercom")
+    ;;
+  opencode|opencodego)
+    DISPLAY_NAME="OpenCode Console"
+    DOMAINS=("opencode.ai")
+    REQUIRED_COOKIE="__Host-console_session"
+    PRIORITY_COOKIES=("__Host-console_session")
+    TARGETS=("__Host-console_session")
     ;;
   *)
     printf '{"error":"UNSUPPORTED_PROVIDER","details":"Unsupported provider: %s"}\n' "$PROVIDER" >&2
@@ -172,7 +181,29 @@ decrypt_v10() {
 }
 
 # --- Collect keyring keys into a temp file (one base64-encoded key per line) ---
+# Console cookies use the standard Linux v10/v11 format. Keep binary host hashes
+# in hex until they have been verified, and let OpenSSL remove PKCS#7 padding.
+hex_to_bytes() {
+  local hex="$1" i
+  for ((i=0; i<${#hex}; i+=2)); do printf '%b' "\\x${hex:i:2}"; done
+}
+bytes_to_hex() { od -An -v -tx1 | tr -d ' \n'; }
+
+decrypt_console_cookie() {
+  local enc_hex="$1" password="$2" host="$3" key_hex plain_hex host_hash
+  [[ "${enc_hex:0:6}" == 763130 || "${enc_hex:0:6}" == 763131 ]] || return 1
+  key_hex="$(derive_aes_key "$password" | bytes_to_hex)" || return 1
+  plain_hex="$(hex_to_bytes "${enc_hex:6}" | \
+    openssl enc -aes-128-cbc -d -K "$key_hex" -iv 20202020202020202020202020202020 2>/dev/null | bytes_to_hex)" || return 1
+  host_hash="$(printf '%s' "$host" | openssl dgst -sha256 -binary | bytes_to_hex)"
+  if [[ "${plain_hex:0:64}" == "$host_hash" ]]; then plain_hex="${plain_hex:64}"; fi
+  # Reject binary data before converting it into a shell string.
+  [[ "$plain_hex" =~ ^(21|2[3-9a-f]|[3-6][0-9a-f]|7[0-9a-e])+$ ]] || return 1
+  hex_to_bytes "$plain_hex"
+}
+
 KEYS_FILE="$(mktemp /tmp/codexbar_keys_XXXXXX)"
+TMPDB=""
 trap 'rm -f "$KEYS_FILE" "$TMPDB"' EXIT
 
 add_key() {
@@ -197,6 +228,7 @@ if out="$(secret-tool search --all xdg:schema chrome_libsecret_os_crypt_password
       secret\ =\ *) secret_b64="${line#secret = }" ;;
     esac
     if [[ -n "$secret_b64" ]]; then
+      [[ "$PROVIDER" == opencode* ]] && add_key "$secret_b64"
       raw="$(printf '%s' "$secret_b64" | base64 -d 2>/dev/null)" || true
       if [[ -n "$raw" ]]; then
         skip=0
@@ -211,7 +243,7 @@ else
 fi
 
 # Search by app_id (Vivaldi Flatpak)
-for app_id in com.vivaldi.Vivaldi; do
+for app_id in com.vivaldi.Vivaldi com.microsoft.Edge com.google.Chrome; do
   if out="$(secret-tool search --all app_id "$app_id" 2>/dev/null)"; then
     secret_b64=""
     while IFS= read -r line; do
@@ -219,6 +251,7 @@ for app_id in com.vivaldi.Vivaldi; do
         secret\ =\ *) secret_b64="${line#secret = }" ;;
       esac
       if [[ -n "$secret_b64" ]]; then
+        [[ "$PROVIDER" == opencode* ]] && add_key "$secret_b64"
         raw="$(printf '%s' "$secret_b64" | base64 -d 2>/dev/null)" || true
         [[ -n "$raw" ]] && add_key "$raw"
         secret_b64=""
@@ -228,7 +261,7 @@ for app_id in com.vivaldi.Vivaldi; do
 done
 
 # Fallback: search by label hints
-for hint in "chrome safe storage" "brave safe storage" "chromium safe storage" "vivaldi safe storage"; do
+for hint in "chrome safe storage" "brave safe storage" "chromium safe storage" "vivaldi safe storage" "Microsoft Edge Safe Storage"; do
   if out="$(secret-tool search --all label "$hint" 2>/dev/null)"; then
     secret_b64=""
     while IFS= read -r line; do
@@ -236,6 +269,7 @@ for hint in "chrome safe storage" "brave safe storage" "chromium safe storage" "
         secret\ =\ *) secret_b64="${line#secret = }" ;;
       esac
       if [[ -n "$secret_b64" ]]; then
+        [[ "$PROVIDER" == opencode* ]] && add_key "$secret_b64"
         raw="$(printf '%s' "$secret_b64" | base64 -d 2>/dev/null)" || true
         if [[ -n "$raw" ]]; then
           echo "$raw" | grep -qi "control" || add_key "$raw"
@@ -250,17 +284,25 @@ done
 add_key "peanuts"
 
 # --- Extract cookies ---
-TMPDB="/tmp/codexbar_cookies_$$.db"
+TMPDB="$(mktemp /tmp/codexbar_cookies_XXXXXX)"
 
 all_cookies=""
 encrypted_targets=0
 
-for browser_path in \
+browser_paths=(
   "$HOME/.config/google-chrome"/*/Cookies \
   "$HOME/.config/BraveSoftware/Brave-Browser"/*/Cookies \
   "$HOME/.config/chromium"/*/Cookies \
   "$HOME/.config/vivaldi"/*/Cookies \
-  "$HOME/.var/app/com.vivaldi.Vivaldi/config/vivaldi"/*/Cookies; do
+  "$HOME/.config/microsoft-edge"/*/Cookies \
+  "$HOME/.config/microsoft-edge"/*/Network/Cookies \
+  "$HOME/.var/app/com.google.Chrome/config/google-chrome"/*/Cookies \
+  "$HOME/.var/app/com.microsoft.Edge/config/microsoft-edge"/*/Cookies \
+  "$HOME/.var/app/com.microsoft.Edge/config/microsoft-edge"/*/Network/Cookies \
+  "$HOME/.var/app/com.vivaldi.Vivaldi/config/vivaldi"/*/Cookies
+)
+if [[ -n "$PROFILE" ]]; then browser_paths=("$PROFILE"); fi
+for browser_path in "${browser_paths[@]}"; do
 
   [[ -f "$browser_path" ]] || continue
 
@@ -275,23 +317,24 @@ for browser_path in \
   where_clause=""
   for domain in "${DOMAINS[@]}"; do
     [[ -n "$where_clause" ]] && where_clause="${where_clause} OR "
-    where_clause="${where_clause}host_key LIKE '%${domain}%'"
+    where_clause="${where_clause}(host_key = '${domain}' OR host_key = '.${domain}' OR host_key LIKE '%.${domain}')"
   done
 
-  cookie_data="$(sqlite3 "$TMPDB" "SELECT name, value, hex(encrypted_value) FROM cookies WHERE ${where_clause};" 2>/dev/null)" || {
+  cookie_data="$(sqlite3 "$TMPDB" "SELECT host_key, name, value, hex(encrypted_value) FROM cookies WHERE ${where_clause};" 2>/dev/null)" || {
     printf '{"error":"DATABASE_ERROR","details":"Failed to read cookie database: %s"}\n' "$browser_path" >&2
     exit 1
   }
 
   [[ -z "$cookie_data" ]] && { rm -f "$TMPDB"; continue; }
 
-  while IFS='|' read -r cookie_name cookie_value enc_hex; do
+  while IFS='|' read -r cookie_host cookie_name cookie_value enc_hex; do
     [[ -z "$cookie_name" ]] && continue
 
     # Check target match
     target_match=0
     for target in "${TARGETS[@]}"; do
-      if [[ "$cookie_name" == *"$target"* ]]; then
+      if { [[ "$PROVIDER" == opencode* ]] && [[ "$cookie_name" == "$target" ]]; } ||
+         { [[ "$PROVIDER" != opencode* ]] && [[ "$cookie_name" == *"$target"* ]]; }; then
         target_match=1
         break
       fi
@@ -312,7 +355,11 @@ for browser_path in \
       while IFS= read -r key_b64; do
         [[ -z "$key_b64" ]] && continue
         decoded_key="$(printf '%s' "$key_b64" | base64 -d 2>/dev/null)" || continue
-        candidate="$(decrypt_v10 "$enc_hex" "$decoded_key")" || continue
+        if [[ "$PROVIDER" == opencode* ]]; then
+          candidate="$(decrypt_console_cookie "$enc_hex" "$decoded_key" "$cookie_host")" || continue
+        else
+          candidate="$(decrypt_v10 "$enc_hex" "$decoded_key")" || continue
+        fi
         if is_plausible_cookie_value "$cookie_name" "$candidate"; then
           decrypted="$candidate"
           break
@@ -324,6 +371,9 @@ for browser_path in \
       all_cookies="${all_cookies}${cookie_name}=${decrypted}"$'\n'
     fi
   done <<< "$cookie_data"
+
+  # A Console session must come from one profile, never concatenated accounts.
+  if [[ "$PROVIDER" == opencode* && -n "$all_cookies" ]]; then break; fi
 
   rm -f "$TMPDB"
 done

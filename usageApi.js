@@ -4,6 +4,7 @@ import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
 import { SoupApiFetcher } from './adapters/SoupApiFetcher.js';
 import { OllamaSettingsFetcher } from './adapters/OllamaSettingsFetcher.js';
+import { OpenCodeConsoleFetcher } from './adapters/OpenCodeConsoleFetcher.js';
 
 import { CliSubprocessFetcher } from './adapters/CliSubprocessFetcher.js';
 
@@ -319,6 +320,7 @@ export class UsageApiClient {
         this._session.set_timeout(30);
         this._soupFetcher = new SoupApiFetcher(this._session);
         this._ollamaFetcher = new OllamaSettingsFetcher(this._session);
+        this._openCodeFetcher = new OpenCodeConsoleFetcher(this._session);
         this._cliFetcher = new CliSubprocessFetcher(extensionPath);
     }
 
@@ -330,7 +332,10 @@ export class UsageApiClient {
      *                              Provider identifier ('codex' or 'ollama').
      * @param {Gio.Cancellable|null} cancellable - Cancellable for the request.
      */
-    async fetchSummary(cookies, providerId = 'codex', cancellable = null) {
+    async fetchSummary(cookies, providerId = 'codex', cancellable = null, options = {}) {
+        if (providerId === 'opencode' || providerId === 'opencodego') {
+            return this._openCodeFetcher.fetch(cookies, {...options, providerId, cancellable});
+        }
         if (providerId === 'ollama') {
             const usagePayload = await this._ollamaFetcher.fetch(cookies, { cancellable });
             return usagePayload;

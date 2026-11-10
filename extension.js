@@ -433,7 +433,9 @@ export default class CodexBarExtension extends Extension {
             this._providersData[i] = { error: _("No token found in keyring") };
             continue;
           }
-          data = await this._apiClient.fetchSummary(token, provider.id, this._cancellable);
+          data = await this._apiClient.fetchSummary(token, provider.id, this._cancellable, {
+            workspaceId: provider.workspaceId || "",
+          });
 
           let apiLabels = [];
           if (data.labels && data.labels.length > 0) {
@@ -1048,6 +1050,29 @@ export default class CodexBarExtension extends Extension {
       this._contentBox.add_child(creditsBox);
     }
 
+    if (Number.isFinite(usage.balanceUSD)) {
+      const balanceBox = new St.BoxLayout({
+        orientation: Clutter.Orientation.VERTICAL,
+        style_class: "codexbar-cost-container",
+        x_expand: true,
+      });
+      balanceBox.add_child(new St.Label({
+        text: _("Zen balance"),
+        style_class: "codexbar-cost-title",
+      }));
+      balanceBox.add_child(new St.Label({
+        text: new Intl.NumberFormat(undefined, {style: "currency", currency: "USD"}).format(usage.balanceUSD),
+        style_class: "codexbar-cost-value",
+      }));
+      this._contentBox.add_child(balanceBox);
+    }
+    if (usage.subscriptionStatus === "none" && !usage.providerCost) {
+      this._contentBox.add_child(new St.Label({
+        text: _("No active OpenCode Go subscription in this workspace."),
+        style_class: "codexbar-detail-note",
+      }));
+    }
+
     if (!hasTiers && usage.providerCost) {
       let costBox = new St.BoxLayout({
         orientation: Clutter.Orientation.VERTICAL,
@@ -1193,6 +1218,8 @@ export default class CodexBarExtension extends Extension {
     // Known provider keys for fallback matching of custom or renamed providers
     // (e.g. a custom "Codex CLI" provider still shows the Codex logo).
     const knownKeys = [
+      "opencodego",
+      "opencode",
       "codex",
       "claude",
       "gemini",
