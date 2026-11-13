@@ -37,6 +37,15 @@
     border-bottom: 1px solid rgba(127, 127, 127, 0.22);
 }
 
+.codexbar-tabs-scroll StScrollBar {
+    opacity: 0;
+}
+
+.codexbar-tabs-scroll.hover StScrollBar,
+.codexbar-tabs-scroll:hover StScrollBar {
+    opacity: 1;
+}
+
 .codexbar-tabs-container {
     padding: 10px;
 }

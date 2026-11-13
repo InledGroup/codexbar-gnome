@@ -95,13 +95,11 @@ export const STATUS_URLS = {
   windsurf: "https://status.windsurf.com/",
 };
 
-export const ADD_ACCOUNT_URL =
-  "https://github.com/steipete/CodexBar/blob/main/docs/configuration.md";
 export const INSTALL_URL = "https://github.com/steipete/CodexBar#installation";
 export const EXTENSION_REPO_URL =
   "https://github.com/InledGroup/codexbar-gnome";
 export const CLI_REPO_URL = "https://github.com/steipete/CodexBar";
-export const LICENSE_URL = `${EXTENSION_REPO_URL}/blob/main/LICENSE.md`;
+export const LICENSE_URL = "https://license.inled.es";
 export const EGO_URL = "https://extensions.gnome.org/extension/9841/codexbar/";
 
 const FALLBACK_URL = "https://codexbar.app";

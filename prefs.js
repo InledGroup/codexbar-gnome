@@ -1,6 +1,5 @@
 
 import Gio from "gi://Gio";
-import GioUnix from "gi://GioUnix";
 import GLib from "gi://GLib";
 import GObject from "gi://GObject";
 import Gtk from "gi://Gtk";
@@ -487,7 +486,14 @@ const CodexBarPrefsPage = GObject.registerClass(
         );
       };
 
+      // Loading a saved token or enabling rows during construction can fire
+      // the row handlers before every row exists. Saving at that point would
+      // truncate the provider list, so batch updates suppress saves until the
+      // whole page is ready.
+      let readyToSave = false;
+      let suppressProviderSave = false;
       const saveProviders = async () => {
+        if (!readyToSave || suppressProviderSave) return;
         const newProviders = [];
         for (const row of this._providerRows) {
           if (row._enabledSwitch.active) {
@@ -838,43 +844,166 @@ const CodexBarPrefsPage = GObject.registerClass(
       };
 
       // Rows are appended next to the existing ones instead of rebuilding the
-      // group, so a CLI scan that finishes while the user is editing cannot
-      // destroy their input.
+      // group, so a scan that finishes while the user is editing cannot
+      // destroy their input. The initial view keeps a few inactive rows so the
+      // page stays usable with the full CLI catalog; the rest live behind the
+      // scrollable "More providers" popover.
+      const INITIAL_INACTIVE_ROWS = 6;
+      let inactiveRowsShown = 0;
       let addBtnRow = null;
-      const addProviderRows = (providers) => {
+      const insertProviderRow = (row) => {
+        if (addBtnRow) group.remove(addBtnRow);
+        group.add(row);
+        if (addBtnRow) group.add(addBtnRow);
+      };
+      const addProviderRows = (providers, { limitInactive = false } = {}) => {
         const present = new Set(this._providerRows.map((row) => row._id));
-        resolveProviderRows(providers, PREDEFINED_PROVIDERS).forEach(
-          ({ info, activeData }) => {
-            if (present.has(info.id)) {
-              // A predefined provider already has a disabled row on the page.
-              // Enable that row instead of adding a duplicate.
-              const existing = this._providerRows.find(
-                (row) => row._id === info.id,
-              );
-              if (existing && activeData && !existing._enabledSwitch.active) {
-                existing._autoDiscovered = !!activeData.autoDiscovered;
-                existing._source = activeData.source || existing._source;
-                existing._useApi = !!activeData.useApi;
-                if (!existing._useApi && activeData.command) {
-                  existing._commandEntry.set_text(activeData.command);
+        const wasSuppressed = suppressProviderSave;
+        suppressProviderSave = true;
+        try {
+          resolveProviderRows(providers, PREDEFINED_PROVIDERS).forEach(
+            ({ info, activeData }) => {
+              if (present.has(info.id)) {
+                // A predefined provider already has a row on the page. Enable
+                // it instead of adding a duplicate.
+                const existing = this._providerRows.find(
+                  (row) => row._id === info.id,
+                );
+                if (existing && activeData && !existing._enabledSwitch.active) {
+                  existing._autoDiscovered = !!activeData.autoDiscovered;
+                  existing._source = activeData.source || existing._source;
+                  existing._useApi = !!activeData.useApi;
+                  if (!existing._useApi && activeData.command) {
+                    existing._commandEntry.set_text(activeData.command);
+                  }
+                  existing._applySource?.(existing._source, {
+                    rewriteCommand: false,
+                  });
+                  existing._enabledSwitch.active = true;
                 }
-                existing._applySource?.(existing._source, {
-                  rewriteCommand: false,
-                });
-                existing._enabledSwitch.active = true;
+                return;
               }
-              return;
-            }
-            const row = createProviderRow(info, activeData);
-            if (addBtnRow) group.remove(addBtnRow);
-            group.add(row);
-            if (addBtnRow) group.add(addBtnRow);
-            present.add(info.id);
-          },
-        );
+              if (!activeData && limitInactive &&
+                  inactiveRowsShown >= INITIAL_INACTIVE_ROWS)
+                return;
+              const row = createProviderRow(info, activeData);
+              insertProviderRow(row);
+              if (!activeData) inactiveRowsShown++;
+              present.add(info.id);
+            },
+          );
+        } finally {
+          suppressProviderSave = wasSuppressed;
+        }
+        if (!wasSuppressed && readyToSave) saveProviders();
       };
 
-      addProviderRows(activeProviders);
+      addProviderRows(activeProviders, { limitInactive: true });
+
+      // The full catalog is browsed in a popover so adding ~70 providers does
+      // not turn the Preferences window into an endless page. The popover has
+      // its own scroll area; choosing an entry creates its normal row above.
+      let refreshCatalog = () => {};
+      const catalogPopover = new Gtk.Popover({ has_arrow: true });
+      const catalogScroll = new Gtk.ScrolledWindow({
+        min_content_width: 360,
+        max_content_height: 420,
+        propagate_natural_height: true,
+        hscrollbar_policy: Gtk.PolicyType.NEVER,
+      });
+      const catalogBox = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 2,
+        margin_top: 6,
+        margin_bottom: 6,
+        margin_start: 6,
+        margin_end: 6,
+      });
+      const catalogButtons = new Map();
+      const catalogProviders = [...PREDEFINED_PROVIDERS].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
+      for (const info of catalogProviders) {
+        const source =
+          info.supportsDirectApi
+            ? DIRECT_API
+            : parseGeneratedCommand(info.defaultCommand)?.source || "auto";
+        const button = new Gtk.Button({
+          css_classes: ["flat"],
+          hexpand: true,
+          halign: Gtk.Align.FILL,
+        });
+        const content = new Gtk.Box({
+          orientation: Gtk.Orientation.HORIZONTAL,
+          spacing: 8,
+        });
+        content.append(
+          new Gtk.Label({ label: info.name, xalign: 0, hexpand: true }),
+        );
+        content.append(
+          new Gtk.Label({
+            label: sourceLabel(source),
+            css_classes: ["dim-label"],
+            xalign: 1,
+          }),
+        );
+        const check = new Gtk.Image({
+          icon_name: "emblem-ok-symbolic",
+          visible: false,
+        });
+        content.append(check);
+        button.set_child(content);
+        button.connect("clicked", () => {
+          const existing = this._providerRows.find((row) => row._id === info.id);
+          if (existing) {
+            if (!existing._enabledSwitch.active)
+              existing._enabledSwitch.active = true;
+            existing.expanded = true;
+          } else {
+            const direct = Boolean(info.supportsDirectApi);
+            const activeData = {
+              id: info.id,
+              name: info.name,
+              command: direct ? "" : info.defaultCommand || "",
+              useApi: direct,
+              source,
+            };
+            insertProviderRow(createProviderRow(info, activeData));
+            saveProviders();
+          }
+          catalogPopover.popdown();
+          refreshCatalog();
+        });
+        catalogButtons.set(info.id, check);
+        catalogBox.append(button);
+      }
+      refreshCatalog = () => {
+        const enabled = new Set(
+          this._providerRows
+            .filter((row) => row._enabledSwitch.active)
+            .map((row) => row._id),
+        );
+        for (const [id, check] of catalogButtons)
+          check.visible = enabled.has(id);
+      };
+      refreshCatalog();
+      catalogScroll.set_child(catalogBox);
+      catalogPopover.set_child(catalogScroll);
+
+      const moreButton = new Gtk.MenuButton({
+        valign: Gtk.Align.CENTER,
+        css_classes: ["flat"],
+      });
+      moreButton.set_popover(catalogPopover);
+      moreButton.set_child(new Gtk.Label({ label: _("Show all providers") }));
+      const moreRow = new Adw.ActionRow({
+        title: _("More providers"),
+        subtitle: _(
+          "Browse the complete Linux-capable list without making this page gigantic",
+        ),
+      });
+      moreRow.add_suffix(moreButton);
+      group.add(moreRow);
 
       addBtnRow = new Adw.ActionRow({
         title: _("Add Custom Provider"),
@@ -935,10 +1064,7 @@ const CodexBarPrefsPage = GObject.registerClass(
                 },
                 newProvider,
               );
-              group.add(row);
-              // Manually move it up if needed, but Adw.PreferencesGroup appends
-              // In GNOME 45+ we can't easily reorder children in PreferencesGroup
-              // without removing the button and re-adding it.
+              insertProviderRow(row);
               saveProviders();
             }
           }
@@ -952,9 +1078,9 @@ const CodexBarPrefsPage = GObject.registerClass(
       // Keep the CLI list in sync without touching existing rows. Runs on
       // opening Preferences and from the refresh button below.
       const syncRow = new Adw.ActionRow({
-        title: _("Scan codexbar for enabled providers"),
+        title: _("Detect installed providers"),
         subtitle: _(
-          "Adds providers enabled in the CLI without changing the ones already configured",
+          "Checks installed provider CLIs and enables them in codexbar. Existing rows are left unchanged.",
         ),
       });
       const syncBtn = new Gtk.Button({
@@ -965,7 +1091,7 @@ const CodexBarPrefsPage = GObject.registerClass(
       const syncSpinner = new Gtk.Spinner({
         valign: Gtk.Align.CENTER,
         visible: false,
-        tooltip_text: _("Scanning codexbar..."),
+        tooltip_text: _("Detecting installed providers..."),
       });
       syncRow.add_suffix(syncBtn);
       syncRow.add_suffix(syncSpinner);
@@ -998,13 +1124,14 @@ const CodexBarPrefsPage = GObject.registerClass(
             if (JSON.stringify(merged) !== JSON.stringify(activeProviders)) {
               activeProviders = merged;
               this._settings.set_string("providers", JSON.stringify(merged));
-              addProviderRows(merged);
+              addProviderRows(merged, { limitInactive: true });
+              refreshCatalog();
               this._refreshPrimaryRow?.();
             }
           } finally {
             finish();
           }
-        });
+        }, { skipIds: dismissed });
       };
       syncBtn.connect("clicked", scanProviders);
 
@@ -1034,6 +1161,7 @@ const CodexBarPrefsPage = GObject.registerClass(
       this._refreshPrimaryRow();
       group.add(primaryRow);
 
+      readyToSave = true;
       scanProviders();
 
       return group;

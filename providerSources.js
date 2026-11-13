@@ -1,4 +1,3 @@
-
 // Provider connection sources.
 //
 // codexbar-cli exposes --source <auto|web|cli|oauth|api>. "Direct API" is not
@@ -112,20 +111,15 @@ export function resolveProviderRows(providers, predefined) {
   return rows;
 }
 
-/**
- * Predefined providers list.
- * Lista de proveedores predefinidos.
- *
- * `supportsDirectApi` marks the providers this extension can query itself with
- * a keyring cookie; the rest reach their source through codexbar-cli.
- */
-export const PREDEFINED_PROVIDERS = [
+// Providers this extension can query itself with a keyring cookie.
+const DIRECT_PROVIDERS = [
   {
     id: "codex",
     name: "Codex",
     useApi: true,
     supportsDirectApi: true,
     defaultCommand: "",
+    detectCommands: ["codex"],
   },
   {
     id: "ollama",
@@ -133,58 +127,124 @@ export const PREDEFINED_PROVIDERS = [
     useApi: true,
     supportsDirectApi: true,
     defaultCommand: "",
+    detectCommands: ["ollama"],
   },
   {
-    id: "claude",
-    name: "Claude",
-    useApi: false,
-    defaultCommand: "codexbar --provider claude --source cli --format json",
-  },
-    {
-    id: "antigravity",
-    name: "Antigravity",
-    useApi: false,
-    defaultCommand:
-      "codexbar --provider antigravity --source cli --format json",
+    id: "opencode",
+    name: "OpenCode",
+    useApi: true,
+    supportsDirectApi: true,
+    defaultCommand: buildCliCommand("opencode", "auto"),
+    detectCommands: ["opencode"],
   },
   {
-    id: "gemini",
-    name: "Gemini CLI",
-    useApi: false,
-    defaultCommand: "codexbar --provider gemini --source api --format json",
+    id: "opencodego",
+    name: "OpenCode Go",
+    useApi: true,
+    supportsDirectApi: true,
+    defaultCommand: buildCliCommand("opencodego", "auto"),
+    detectCommands: ["opencode"],
   },
+];
+
+// Providers exposed by codexbar-cli without requiring a browser-cookie-only
+// path. Each row keeps its preferred non-cookie source; users can still pick
+// another source in Preferences when their setup needs it.
+//
+// `detectCommands` is used by the Preferences scanner: if the provider's own
+// CLI is installed, the extension enables that provider in codexbar instead of
+// waiting for it to be configured by hand.
+const CLI_PROVIDER_DEFS = [
+  { id: "claude", name: "Claude", source: "cli", detectCommands: ["claude"] },
+  { id: "gemini", name: "Gemini", source: "api", detectCommands: ["gemini"] },
+  { id: "antigravity", name: "Antigravity", source: "cli", detectCommands: ["agy"] },
+  { id: "copilot", name: "Copilot", source: "api" },
+  { id: "openrouter", name: "OpenRouter", source: "api" },
+  { id: "deepseek", name: "DeepSeek", source: "api" },
+  { id: "openai", name: "OpenAI", source: "api" },
+  { id: "azureopenai", name: "Azure OpenAI", source: "api" },
+  { id: "clinepass", name: "ClinePass", source: "api", detectCommands: ["cline"] },
+  { id: "alibaba", name: "Alibaba", source: "api" },
+  { id: "alibabatokenplan", name: "Alibaba Token Plan", source: "cli", detectCommands: ["bl"] },
+  { id: "factory", name: "Droid", source: "api", detectCommands: ["droid"] },
+  { id: "fireworks", name: "Fireworks", source: "api" },
+  { id: "zai", name: "z.ai / GLM", source: "api" },
+  { id: "minimax", name: "MiniMax", source: "api" },
+  { id: "kimi", name: "Kimi Code", source: "api" },
+  { id: "kilo", name: "Kilo", source: "api", detectCommands: ["kilo"] },
+  { id: "kiro", name: "Kiro", source: "cli", detectCommands: ["kiro-cli"] },
+  { id: "vertexai", name: "Vertex AI", source: "oauth" },
+  { id: "augment", name: "Augment", source: "cli", detectCommands: ["auggie"] },
   {
-    id: "deepseek",
-    name: "DeepSeek",
-    useApi: false,
-    defaultCommand: "codexbar --provider deepseek --source api --format json",
+    id: "jetbrains",
+    name: "JetBrains AI",
+    source: "auto",
+    detectPaths: [".config/JetBrains", ".config/Google"],
   },
+  { id: "moonshot", name: "Moonshot / Kimi Open Platform", source: "api" },
+  { id: "amp", name: "Amp", source: "cli", detectCommands: ["amp"] },
+  { id: "synthetic", name: "Synthetic", source: "api" },
+  { id: "elevenlabs", name: "ElevenLabs", source: "api" },
+  { id: "warp", name: "Warp", source: "api" },
+  { id: "windsurf", name: "Windsurf", source: "auto", detectCommands: ["windsurf"] },
+  { id: "doubao", name: "Doubao", source: "api" },
+  { id: "deepinfra", name: "DeepInfra", source: "api" },
+  { id: "codebuff", name: "Codebuff", source: "api", detectCommands: ["codebuff"] },
+  { id: "venice", name: "Venice", source: "api" },
+  { id: "commandcode", name: "Command Code", source: "api" },
+  { id: "bedrock", name: "AWS Bedrock", source: "api" },
+  { id: "grok", name: "Grok", source: "cli", detectCommands: ["grok"] },
+  { id: "groq", name: "Groq", source: "api" },
+  { id: "llmproxy", name: "LLM Proxy", source: "api" },
+  { id: "litellm", name: "LiteLLM", source: "api" },
+  { id: "bifrost", name: "Bifrost", source: "api" },
+  { id: "aixy", name: "Aixy", source: "api" },
+  { id: "deepgram", name: "Deepgram", source: "api" },
+  { id: "poe", name: "Poe", source: "api" },
+  { id: "chutes", name: "Chutes", source: "api" },
+  { id: "neuralwatt", name: "Neuralwatt", source: "api" },
+  { id: "clawrouter", name: "ClawRouter", source: "api" },
+  { id: "sub2api", name: "sub2api", source: "api" },
+  { id: "wayfinder", name: "Wayfinder", source: "auto" },
+  { id: "zenmux", name: "ZenMux", source: "api" },
+  { id: "aiand", name: "ai&", source: "api" },
+  { id: "xai", name: "xAI", source: "api" },
+  { id: "ibmbob", name: "IBM Bob", source: "api" },
+  { id: "nous", name: "Nous Portal", source: "api", detectCommands: ["hermes"] },
+  { id: "muse", name: "Muse Code", source: "oauth", detectCommands: ["muse"] },
   {
-    id: "copilot",
-    name: "Copilot",
-    useApi: false,
-    defaultCommand: "codexbar --provider copilot --source api --format json",
+    id: "coderabbit",
+    name: "CodeRabbit",
+    source: "cli",
+    detectCommands: ["coderabbit"],
   },
-  {
-    id: "openrouter",
-    name: "OpenRouter",
+  { id: "huggingface", name: "Hugging Face", source: "api" },
+  { id: "pi", name: "Pi", source: "auto", detectCommands: ["pi"] },
+  { id: "v0", name: "v0", source: "api" },
+  { id: "hyper", name: "Charm Hyper", source: "auto", detectCommands: ["hyper"] },
+  { id: "gitkraken", name: "GitKraken AI", source: "api", detectCommands: ["gk"] },
+  { id: "devpass", name: "DevPass", source: "api" },
+  { id: "atlascloud", name: "Atlas Cloud", source: "api" },
+  { id: "vercel", name: "Vercel AI Gateway", source: "api" },
+  { id: "llmman", name: "llmman", source: "auto", detectCommands: ["llmman"] },
+  { id: "xkiro", name: "xKiro", source: "api" },
+  { id: "tavily", name: "Tavily", source: "api" },
+  { id: "linkup", name: "Linkup", source: "api" },
+  { id: "exa", name: "Exa", source: "api" },
+  { id: "cosmic", name: "Cosmic AI", source: "api" },
+  { id: "aerostack", name: "Aerostack", source: "api" },
+  { id: "sailresearch", name: "Sail Research", source: "api" },
+  { id: "sofya", name: "Sofya", source: "api" },
+];
+
+export const PREDEFINED_PROVIDERS = [
+  ...DIRECT_PROVIDERS,
+  ...CLI_PROVIDER_DEFS.map(({ id, name, source, detectCommands, detectPaths }) => ({
+    id,
+    name,
     useApi: false,
-    defaultCommand: "codexbar --provider openrouter --source api --format json",
-  },
-  {
-    id: "perplexity",
-    name: "Perplexity",
-    useApi: false,
-    defaultCommand: "codexbar --provider perplexity --source api --format json",
-  },
-  {
-    id: "mistral",
-    name: "Mistral",
-    useApi: false,
-    defaultCommand: "codexbar --provider mistral --source api --format json",
-  },
-  ...[['opencode', 'OpenCode'], ['opencodego', 'OpenCode Go']].map(([id, name]) => ({
-    id, name, useApi: true, supportsDirectApi: true,
-    defaultCommand: buildCliCommand(id, 'auto'),
+    defaultCommand: buildCliCommand(id, source),
+    ...(detectCommands ? { detectCommands } : {}),
+    ...(detectPaths ? { detectPaths } : {}),
   })),
 ];

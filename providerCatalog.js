@@ -1,22 +1,28 @@
-// Pure helpers for discovering the providers enabled in the codexbar CLI.
+// Pure helpers for discovering installed providers and merging them into the
+// extension's settings.
 //
-// Kept free of gi:// imports so the parsing and merge rules can be tested with
-// a bare `gjs -m`.
+// Kept free of gi:// imports so the parsing, detection and merge rules can be
+// tested with a bare `gjs -m`.
 
-import { buildCliCommand, DIRECT_API } from "./providerSources.js";
+import {
+  buildCliCommand,
+  DIRECT_API,
+  parseGeneratedCommand,
+} from "./providerSources.js";
 
 const PROVIDER_ID_RE = /^[a-z][a-z0-9_-]*$/;
 
 /**
- * Parse `codexbar config providers --format json` into the enabled providers.
+ * Parse `codexbar config providers --format json` including disabled entries.
  *
- * The CLI emits one object per known provider, including disabled ones. Only
- * enabled entries are useful here: a disabled provider cannot be queried.
+ * The full catalog is useful because the CLI knows every provider ID it can
+ * query, even before the user enables one. Preferences uses the enabled subset
+ * for the automatic merge and the static catalog for browsing.
  *
  * @param {unknown} raw Parsed JSON, or the raw JSON text.
- * @returns {Array<{id: string, name: string}>}
+ * @returns {Array<{id: string, name: string, enabled: boolean}>}
  */
-export function parseConfigProviders(raw) {
+export function parseProviderCatalog(raw) {
   let payload = raw;
   if (typeof raw === "string") {
     try {
@@ -35,7 +41,7 @@ export function parseConfigProviders(raw) {
   const seen = new Set();
   const result = [];
   for (const entry of entries) {
-    if (!entry || typeof entry !== "object" || entry.enabled !== true) continue;
+    if (!entry || typeof entry !== "object") continue;
     const id = typeof entry.provider === "string" ? entry.provider.trim() : "";
     if (!PROVIDER_ID_RE.test(id) || seen.has(id)) continue;
 
@@ -43,6 +49,7 @@ export function parseConfigProviders(raw) {
     result.push({
       id,
       name: rawName ? rawName.slice(0, 120) : id,
+      enabled: entry.enabled === true,
     });
     seen.add(id);
   }
@@ -50,7 +57,51 @@ export function parseConfigProviders(raw) {
 }
 
 /**
- * Add CLI-enabled providers that are not configured yet.
+ * Parse the enabled subset. Kept as a separate helper because callers that only
+ * need "what can I query now" should not filter the full catalog themselves.
+ *
+ * @param {unknown} raw Parsed JSON, or the raw JSON text.
+ * @returns {Array<{id: string, name: string}>}
+ */
+export function parseConfigProviders(raw) {
+  return parseProviderCatalog(raw)
+    .filter((entry) => entry.enabled)
+    .map(({ id, name }) => ({ id, name }));
+}
+
+/**
+ * Find providers whose own CLI or local app is installed.
+ *
+ * The probes are injected so this stays testable without gi:// imports. The
+ * caller decides what counts as a command/path; this function only applies the
+ * declarative metadata from providerSources.js.
+ *
+ * @param {Array<object>} predefined Provider metadata.
+ * @param {{hasCommand?: (name: string) => boolean, hasPath?: (path: string) => boolean}} probes
+ * @returns {Array<{id: string, name: string}>}
+ */
+export function detectInstalledProviders(
+  predefined,
+  { hasCommand = () => false, hasPath = () => false } = {},
+) {
+  const found = [];
+  const seen = new Set();
+  for (const info of Array.isArray(predefined) ? predefined : []) {
+    if (!info || typeof info.id !== "string" || seen.has(info.id)) continue;
+    const commands = Array.isArray(info.detectCommands) ? info.detectCommands : [];
+    const paths = Array.isArray(info.detectPaths) ? info.detectPaths : [];
+    if (!commands.some((command) => hasCommand(command)) &&
+        !paths.some((path) => hasPath(path))) {
+      continue;
+    }
+    found.push({ id: info.id, name: info.name || info.id });
+    seen.add(info.id);
+  }
+  return found;
+}
+
+/**
+ * Add enabled or installed providers that are not configured yet.
  *
  * Saved entries are never rewritten or removed: a user may have hand-edited a
  * command, pinned a workspace or chosen Direct API. Discovered entries are
@@ -58,7 +109,7 @@ export function parseConfigProviders(raw) {
  * the next scan.
  *
  * @param {Array<object>} saved Providers already stored in settings.
- * @param {Array<{id: string, name: string}>} discovered Enabled CLI providers.
+ * @param {Array<{id: string, name: string}>} discovered Enabled or installed providers.
  * @param {Array<{id: string, name: string, defaultCommand?: string}>} predefined
  * @param {string[]} dismissed Provider ids the user removed from Preferences.
  * @returns {Array<object>} New list; the input is not mutated.
@@ -88,14 +139,17 @@ export function mergeDiscoveredProviders(
     // do have this extension's direct adapter. Add them in that mode instead
     // of generating a command that can only fail.
     const direct = Boolean(info?.supportsDirectApi);
+    const source = direct
+      ? DIRECT_API
+      : parseGeneratedCommand(info?.defaultCommand)?.source || "auto";
     providers.push({
       id: entry.id,
       name: info?.name || entry.name || entry.id,
       command: direct
         ? ""
-        : info?.defaultCommand || buildCliCommand(entry.id, "auto"),
+        : info?.defaultCommand || buildCliCommand(entry.id, source),
       useApi: direct,
-      source: direct ? DIRECT_API : "auto",
+      source,
       autoDiscovered: true,
     });
     known.add(entry.id);

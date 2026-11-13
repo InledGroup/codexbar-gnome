@@ -1,1 +1,3 @@
-Released under MIT-INLED license (license.inled.es)
+Released under the MIT-INLED license.
+
+https://license.inled.es

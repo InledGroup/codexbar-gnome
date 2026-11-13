@@ -8,10 +8,9 @@ version = "0.1.1"
 description = "A utility to discover, extract, and trust the local Antigravity server self-signed SSL certificate."
 readme = "README.md"
 requires-python = ">=3.7"
-license = { text = "MIT" }
+license = { text = "MIT-INLED" }
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
 ]
 dependencies = []

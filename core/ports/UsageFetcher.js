@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: LicenseRef-MIT-INLED
  * PORT (Hexagonal Architecture)
  * Represents the contract/interface to fetch usage metrics from any AI provider.
  * All concrete adapters must implement this interface.

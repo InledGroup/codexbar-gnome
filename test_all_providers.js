@@ -20,10 +20,13 @@ import {
   adoptCustomProviders,
   buildCliCommand,
   parseGeneratedCommand,
+  PREDEFINED_PROVIDERS,
 } from "./providerSources.js";
 import {
+  detectInstalledProviders,
   mergeDiscoveredProviders,
   parseConfigProviders,
+  parseProviderCatalog,
 } from "./providerCatalog.js";
 import {
   formatMoney,
@@ -827,6 +830,45 @@ if (parseConfigProviders("not json").length !== 0 || parseConfigProviders(null).
   throw new Error("Expected malformed discovery payloads to return an empty list");
 }
 console.log("✓ parseConfigProviders keeps enabled, unique, valid ids only");
+
+const fullCatalog = parseProviderCatalog(rawProviders);
+if (fullCatalog.length !== 3 || fullCatalog.find((p) => p.id === "claude")?.enabled !== false) {
+  throw new Error(`Expected the full catalog to include disabled providers, got ${JSON.stringify(fullCatalog)}`);
+}
+console.log("✓ parseProviderCatalog keeps disabled providers for browsing");
+
+const installed = detectInstalledProviders(
+  [
+    { id: "codex", name: "Codex", detectCommands: ["codex"] },
+    { id: "claude", name: "Claude", detectCommands: ["claude"] },
+    { id: "jetbrains", name: "JetBrains AI", detectPaths: [".config/JetBrains"] },
+  ],
+  {
+    hasCommand: (command) => command === "codex",
+    hasPath: (path) => path === ".config/JetBrains",
+  },
+);
+if (installed.map((p) => p.id).join(",") !== "codex,jetbrains") {
+  throw new Error(`Unexpected installed provider detection: ${JSON.stringify(installed)}`);
+}
+if (detectInstalledProviders(null, {}).length !== 0) {
+  throw new Error("Expected detection to defend against a malformed catalog");
+}
+console.log("✓ detectInstalledProviders checks commands and local app paths");
+
+const predefinedIds = PREDEFINED_PROVIDERS.map((p) => p.id);
+if (new Set(predefinedIds).size !== predefinedIds.length) {
+  throw new Error("Expected unique predefined provider ids");
+}
+for (const id of ["openrouter", "kiro", "bedrock", "xai", "llmman"]) {
+  if (!predefinedIds.includes(id))
+    throw new Error(`Expected ${id} in the CLI provider catalog`);
+}
+for (const id of ["mistral", "perplexity", "cursor", "devin"]) {
+  if (predefinedIds.includes(id))
+    throw new Error(`Cookie-only provider ${id} must not be in the Linux catalog`);
+}
+console.log("✓ predefined catalog covers non-cookie CLI providers only");
 
 const savedBefore = [
   { id: "codex", name: "Codex", command: "codexbar --provider codex --source cli --format json", useApi: false },

@@ -11,9 +11,9 @@ authors = [
 description = "Cookie extraction utility for CodexBar GNOME Extension to import session tokens from Chromium browsers."
 readme = "README.md"
 requires-python = ">=3.7"
+license = { text = "MIT-INLED" }
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
 ]
 dependencies = [

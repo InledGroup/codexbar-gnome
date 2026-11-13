@@ -25,7 +25,6 @@ import { discoverEnabledProviders } from "./providerDiscovery.js";
 import { PREDEFINED_PROVIDERS } from "./providerSources.js";
 import { formatMoney, formatTokens, parseCostPayload } from "./cost.js";
 import {
-  ADD_ACCOUNT_URL,
   CLI_REPO_URL,
   EGO_URL,
   EXTENSION_REPO_URL,
@@ -181,11 +180,115 @@ export default class CodexBarExtension extends Extension {
     this._indicator.menu.box.add_child(this._headerBox);
     this._indicator.menu.box.add_style_class_name("codexbar-popup");
 
+    // Provider tabs are housed in a horizontal St.ScrollView so they don't
+    // overflow the popup when multiple providers are configured.
+    this._tabsScroll = new St.ScrollView({
+      style_class: "codexbar-tabs-scroll",
+      hscrollbar_policy: St.PolicyType.AUTOMATIC,
+      vscrollbar_policy: St.PolicyType.NEVER,
+      enable_mouse_scrolling: true,
+      overlay_scrollbars: true,
+      x_expand: true,
+      clip_to_allocation: true,
+      reactive: true,
+    });
+
+    const setScrollbarVisible = (visible) => {
+      const hscroll = this._tabsScroll
+        ?.get_children()
+        ?.find(
+          (c) =>
+            c instanceof St.ScrollBar &&
+            c.get_orientation() === Clutter.Orientation.HORIZONTAL,
+        );
+      if (!hscroll) return;
+
+      const hadj = this._tabsScroll.get_hadjustment();
+      const canScroll = hadj && hadj.upper > hadj.page_size + 1;
+      const shouldShow = visible && canScroll;
+
+      hscroll.remove_all_transitions();
+      hscroll.ease({
+        opacity: shouldShow ? 255 : 0,
+        duration: 200,
+        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+      });
+      hscroll.reactive = shouldShow;
+
+      if (shouldShow) {
+        this._tabsScroll.add_style_class_name("hover");
+      } else {
+        this._tabsScroll.remove_style_class_name("hover");
+      }
+    };
+
+    const initialHScroll = this._tabsScroll
+      .get_children()
+      .find(
+        (c) =>
+          c instanceof St.ScrollBar &&
+          c.get_orientation() === Clutter.Orientation.HORIZONTAL,
+      );
+    if (initialHScroll) {
+      initialHScroll.opacity = 0;
+      initialHScroll.reactive = false;
+    }
+
+    this._tabsScroll.connect("enter-event", (_actor, event) => {
+      const related = event.get_related();
+      if (!related || !this._tabsScroll.contains(related)) {
+        setScrollbarVisible(true);
+      }
+      return Clutter.EVENT_PROPAGATE;
+    });
+
+    this._tabsScroll.connect("leave-event", (_actor, event) => {
+      const related = event.get_related();
+      if (!related || !this._tabsScroll.contains(related)) {
+        setScrollbarVisible(false);
+      }
+      return Clutter.EVENT_PROPAGATE;
+    });
+
+    this._tabsScroll.connect("notify::hover", () => {
+      setScrollbarVisible(this._tabsScroll.hover);
+    });
+
+    this._tabsScroll.connect("scroll-event", (_actor, event) => {
+      setScrollbarVisible(true);
+      const hadj = this._tabsScroll.get_hadjustment();
+      if (!hadj) return Clutter.EVENT_PROPAGATE;
+
+      const dir = event.get_scroll_direction();
+      if (dir === Clutter.ScrollDirection.SMOOTH) {
+        const [dx, dy] = event.get_scroll_delta();
+        if (dx !== 0 || dy !== 0) {
+          hadj.adjust_for_scroll_event(dx !== 0 ? dx : dy);
+          return Clutter.EVENT_STOP;
+        }
+      } else if (
+        dir === Clutter.ScrollDirection.UP ||
+        dir === Clutter.ScrollDirection.LEFT
+      ) {
+        hadj.adjust_for_scroll_event(-1);
+        return Clutter.EVENT_STOP;
+      } else if (
+        dir === Clutter.ScrollDirection.DOWN ||
+        dir === Clutter.ScrollDirection.RIGHT
+      ) {
+        hadj.adjust_for_scroll_event(1);
+        return Clutter.EVENT_STOP;
+      }
+
+      return Clutter.EVENT_PROPAGATE;
+    });
+
     this._tabsContainer = new St.BoxLayout({
       style_class: "codexbar-tabs-container",
       orientation: Clutter.Orientation.HORIZONTAL,
     });
-    this._indicator.menu.box.add_child(this._tabsContainer);
+    this._tabsScroll.set_child(this._tabsContainer);
+    this._indicator.menu.box.add_child(this._tabsScroll);
 
     this._contentBox = new St.BoxLayout({
       orientation: Clutter.Orientation.VERTICAL,
@@ -217,7 +320,11 @@ export default class CodexBarExtension extends Extension {
     // Opening the popup is a signal that the user wants current numbers; the
     // timer alone can be up to `refresh-interval` minutes old.
     this._indicator.menu.connect("open-state-changed", (_menu, isOpen) => {
-      if (!isOpen || this._loading) return;
+      if (!isOpen) {
+        setScrollbarVisible(false);
+        return;
+      }
+      if (this._loading) return;
       if (Date.now() - this._lastRefreshAt < 10000) return;
       this._requestRefresh();
     });
@@ -343,10 +450,11 @@ export default class CodexBarExtension extends Extension {
       this._headerBox.destroy();
       this._headerBox = null;
     }
-    if (this._tabsContainer) {
-      this._tabsContainer.destroy();
-      this._tabsContainer = null;
+    if (this._tabsScroll) {
+      this._tabsScroll.destroy();
+      this._tabsScroll = null;
     }
+    this._tabsContainer = null;
     if (this._contentBox) {
       this._contentBox.destroy();
       this._contentBox = null;
@@ -381,35 +489,51 @@ export default class CodexBarExtension extends Extension {
    * Preferences edit is not overwritten.
    */
   _discoverProviders() {
-    discoverEnabledProviders((discovered) => {
-      if (!this._settings || discovered.length === 0) return;
-
-      let saved = [];
-      try {
-        saved = JSON.parse(this._settings.get_string("providers"));
-      } catch (e) {
-        saved = [];
-      }
-      let dismissed = [];
-      try {
-        const value = JSON.parse(
-          this._settings.get_string("dismissed-providers"),
-        );
-        if (Array.isArray(value)) dismissed = value;
-      } catch (e) {
-        dismissed = [];
-      }
-
-      const merged = mergeDiscoveredProviders(
-        saved,
-        discovered,
-        PREDEFINED_PROVIDERS,
-        dismissed,
+    if (!this._settings) return;
+    let dismissed = [];
+    try {
+      const value = JSON.parse(
+        this._settings.get_string("dismissed-providers"),
       );
-      if (JSON.stringify(merged) !== JSON.stringify(saved)) {
-        this._settings.set_string("providers", JSON.stringify(merged));
-      }
-    });
+      if (Array.isArray(value)) dismissed = value;
+    } catch (e) {
+      dismissed = [];
+    }
+
+    discoverEnabledProviders(
+      (discovered) => {
+        if (!this._settings) return;
+
+        let saved = [];
+        try {
+          saved = JSON.parse(this._settings.get_string("providers"));
+        } catch (e) {
+          saved = [];
+        }
+
+        const merged = mergeDiscoveredProviders(
+          saved,
+          discovered,
+          PREDEFINED_PROVIDERS,
+          dismissed,
+        );
+        if (JSON.stringify(merged) !== JSON.stringify(saved)) {
+          this._settings.set_string("providers", JSON.stringify(merged));
+        }
+
+        // On the first launch there is nothing to ask: the local providers we
+        // just enabled are ready to query, so skip the welcome screen instead
+        // of waiting for the user to press "Get Started".
+        if (
+          discovered.length > 0 &&
+          merged.length > 0 &&
+          this._settings.get_boolean("first-run")
+        ) {
+          this._settings.set_boolean("first-run", false);
+        }
+      },
+      { skipIds: dismissed },
+    );
   }
 
   _startRefreshSpinner() {
@@ -937,7 +1061,10 @@ export default class CodexBarExtension extends Extension {
     const providerId = () =>
       this._providers?.[this._activeProviderIndex]?.id || "";
 
-    add(_("Add Account..."), "list-add-symbolic", open(ADD_ACCOUNT_URL));
+    add(_("Add Provider..."), "list-add-symbolic", () => {
+      this._indicator?.menu.close();
+      this.openPreferences();
+    });
     add(_("Usage Dashboard"), "view-list-symbolic", () =>
       open(usageUrl(providerId()))(),
     );
@@ -977,7 +1104,7 @@ export default class CodexBarExtension extends Extension {
       text:
         `${name}${version ? ` — ${_("Version")} ${version}` : ""}\n\n` +
         _(
-          "AI provider usage in the GNOME panel.\nBased on CodexBar by @steipete. MIT licence.",
+          "AI provider usage in the GNOME panel.\nBased on CodexBar by @steipete. MIT-INLED licence.",
         ),
     });
     text.clutter_text.line_wrap = true;
@@ -1924,7 +2051,8 @@ export default class CodexBarExtension extends Extension {
     let box = new St.BoxLayout({
       orientation: Clutter.Orientation.VERTICAL,
       x_expand: true,
-      style: "padding: 12px; spacing: 10px;",
+      spacing: 10,
+      style: "padding: 12px;",
     });
 
     box.add_child(
@@ -1937,7 +2065,8 @@ export default class CodexBarExtension extends Extension {
     // Language names stay in their own language; not passed to gettext.
     const langRow = new St.BoxLayout({
       orientation: Clutter.Orientation.HORIZONTAL,
-      style: "spacing: 6px; margin-bottom: 8px;",
+      spacing: 6,
+      style: "margin-bottom: 8px;",
       x_align: Clutter.ActorAlign.START,
     });
     langRow.add_child(

@@ -6,7 +6,7 @@ Author-email: Inled Group <hi@inled.es>
 Project-URL: Homepage, https://github.com/InledGroup/codexbar-gnome
 Project-URL: Issues, https://github.com/InledGroup/codexbar-gnome/issues
 Classifier: Programming Language :: Python :: 3
-Classifier: License :: OSI Approved :: MIT License
+License: MIT-INLED
 Classifier: Operating System :: POSIX :: Linux
 Requires-Python: >=3.7
 Description-Content-Type: text/markdown

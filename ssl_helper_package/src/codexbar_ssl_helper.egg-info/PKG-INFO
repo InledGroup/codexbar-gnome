@@ -2,9 +2,8 @@ Metadata-Version: 2.4
 Name: codexbar-ssl-helper
 Version: 0.1.1
 Summary: A utility to discover, extract, and trust the local Antigravity server self-signed SSL certificate.
-License: MIT
+License: MIT-INLED
 Classifier: Programming Language :: Python :: 3
-Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: POSIX :: Linux
 Requires-Python: >=3.7
 Description-Content-Type: text/markdown

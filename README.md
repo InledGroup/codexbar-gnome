@@ -90,6 +90,21 @@ You can download it from the official GNOME store. It takes longer to be updated
 
 Access the settings through the gear icon in the extension menu or using your extension manager client.
 
+### Provider Catalog
+
+Preferences includes every provider that the installed `codexbar` CLI can query
+without a browser-cookie-only path. Providers that only expose a web session
+and were not adapted for Linux are intentionally left out. The full list lives
+under **More providers**, with its own scroll area, so the main page stays
+short.
+
+On startup and whenever you press **Detect installed providers**, the extension
+checks for installed provider CLIs (Codex, Claude, Gemini, OpenCode, Kiro,
+Kilo, Cline, Ollama, Antigravity, etc.), runs `codexbar config enable` for the
+ones it finds, and adds them to the extension's provider list. Providers that
+need an API key can be configured with `codexbar config set-api-key`; the CLI
+is the single source of truth for those credentials.
+
 ### Provider Commands
 
 Each provider must be configured with a command that returns JSON output.
