@@ -6,6 +6,7 @@ import { UsageApiError, formatResetDescription } from '../usageApi.js';
 
 const OLLAMA_SETTINGS_URL = 'https://ollama.com/settings';
 const OLLAMA_BILLING_URL = 'https://ollama.com/settings/billing';
+const OLLAMA_DASHBOARD_URL = 'https://ollama.com/dashboard';
 
 /**
  * ADAPTER (Hexagonal Architecture)
@@ -43,10 +44,31 @@ export class OllamaSettingsFetcher extends UsageFetcher {
         if (!cookies)
             throw new UsageApiError('Authentication cookies are required.');
 
-        const html = await this._getSettingsHtml(cookies, cancellable);
+        // The usage card moved to /dashboard (server-rendered). /settings is
+        // still fetched as a fallback for older layouts and legacy
+        // session/weekly accounts.
+        // La tarjeta de uso se movió a /dashboard (renderizada en el servidor).
+        // /settings se sigue consultando como respaldo para diseños anteriores
+        // y cuentas heredadas con session/weekly.
+        let dashboardHtml = null;
+        try {
+            dashboardHtml = await this._getDashboardHtml(cookies, cancellable);
+        } catch (e) {
+            dashboardHtml = null;
+        }
+
+        if (dashboardHtml) {
+            const dashboardText = this._htmlToText(dashboardHtml);
+            if (this._hasCreditBlock(dashboardText)) {
+                return this._parseSettingsHtml(dashboardHtml, null, dashboardText);
+            }
+        }
+
+        const settingsHtml = await this._getSettingsHtml(cookies, cancellable);
+        const settingsText = this._htmlToText(settingsHtml);
 
         let billingHtml = null;
-        if (this._hasCreditBlock(this._htmlToText(html))) {
+        if (this._hasCreditBlock(settingsText)) {
             try {
                 billingHtml = await this._getBillingHtml(cookies, cancellable);
             } catch (e) {
@@ -54,7 +76,7 @@ export class OllamaSettingsFetcher extends UsageFetcher {
             }
         }
 
-        return this._parseSettingsHtml(html, billingHtml);
+        return this._parseSettingsHtml(settingsHtml, billingHtml);
     }
 
     /**
@@ -62,6 +84,14 @@ export class OllamaSettingsFetcher extends UsageFetcher {
      */
     async _getSettingsHtml(cookies, cancellable) {
         return this._fetchHtml(OLLAMA_SETTINGS_URL, cookies, cancellable);
+    }
+
+    /**
+     * Fetch the dashboard HTML, which now hosts the usage card.
+     * Obtiene el HTML del dashboard, que ahora aloja la tarjeta de uso.
+     */
+    async _getDashboardHtml(cookies, cancellable) {
+        return this._fetchHtml(OLLAMA_DASHBOARD_URL, cookies, cancellable);
     }
 
     /**
@@ -135,20 +165,23 @@ export class OllamaSettingsFetcher extends UsageFetcher {
      */
     _hasCreditBlock(text) {
         const lower = text.toLowerCase();
-        // Current layout: "Usage credits pro … Monthly credits used $X … Refills to $Y on <date>"
-        if (/monthly credits used\s*\$[\d,]+/i.test(text)) return true;
+        // Current dashboard layout: "Monthly credits $X Refills to $Y on <date>"
+        if (/monthly credits\s*\$[\d,]+\s*refills to/i.test(text)) return true;
         if (/refills to\s*\$[\d,]+/i.test(text)) return true;
 
-        // Previous layout: "Monthly usage $X of $Y used"
+        // Previous layout: "Monthly credits used $X … Refills to $Y on <date>"
+        if (/monthly credits used\s*\$[\d,]+/i.test(text)) return true;
+
+        // Older layout: "Monthly usage $X of $Y used"
         if (/monthly usage\s*\$[\d,]+/i.test(text)) return true;
 
-        // Older pay-as-you-go variant: "usage credits … $X current balance"
+        // Oldest pay-as-you-go variant: "usage credits … $X current balance"
         return lower.includes('usage credits') &&
             /\$[\d,]+(?:\.\d{1,2})?\s*current balance/i.test(text);
     }
 
-    _parseSettingsHtml(html, billingHtml = null) {
-        const text = this._htmlToText(html);
+    _parseSettingsHtml(html, billingHtml = null, precomputedText = null) {
+        const text = precomputedText ?? this._htmlToText(html);
         const lowerText = text.toLowerCase();
         const hasCloudUsage = lowerText.includes('cloud usage');
         const hasUsageWindow = lowerText.includes('session') && lowerText.includes('weekly');
@@ -204,14 +237,30 @@ export class OllamaSettingsFetcher extends UsageFetcher {
         let resetDate = null;
         let layout = 'credits';
 
-        // Current layout (late 2026): used is spelled out, limit comes from the refill
+        // Current dashboard layout: the tooltip shows the remaining monthly
+        // credits and the refill target, so used = limit - remaining.
+        // El diseño actual del dashboard muestra los créditos mensuales
+        // restantes y el objetivo de recarga, así que usado = límite - restante.
+        const remainingMatch = text.match(/monthly credits\s*\$([\d,]+(?:\.\d{1,2})?)\s*refills to\s*\$([\d,]+(?:\.\d{1,2})?)\s+on\s+([A-Za-z]+\s+\d{1,2}(?:,?\s*\d{4})?)/i);
+        if (remainingMatch) {
+            const remaining = this._parseAmount(remainingMatch[1]);
+            limit = this._parseAmount(remainingMatch[2]);
+            used = remaining !== null && limit !== null
+                ? Math.max(0, limit - remaining)
+                : null;
+            resetDate = this._parseRenewalDate(remainingMatch[3]);
+            layout = 'remaining';
+        }
+
+        // Previous layout (late 2026): used is spelled out, limit comes from the refill
         // sentence, which also carries the exact refill date.
         const usedMatch = text.match(/monthly credits used\s*\$([\d,]+(?:\.\d{1,2})?)/i);
         const refillMatch = text.match(/refills to\s*\$([\d,]+(?:\.\d{1,2})?)\s+on\s+([A-Za-z]+\s+\d{1,2}(?:,?\s*\d{4})?)/i);
-        if (usedMatch && refillMatch) {
+        if (used === null && usedMatch && refillMatch) {
             used = this._parseAmount(usedMatch[1]);
             limit = this._parseAmount(refillMatch[1]);
             resetDate = this._parseRenewalDate(refillMatch[2]);
+            layout = 'credits';
         }
 
         // Previous layout: "Monthly usage $used of $limit used"
@@ -255,8 +304,12 @@ export class OllamaSettingsFetcher extends UsageFetcher {
             resetLabel = this._extractResetText(poolText);
         }
 
-        // Page plan badge looks like "Usage credits pro"; billing spells it "Pro".
-        const pagePlanMatch = text.match(/usage credits\s+(free|pro|max|team)\b/i);
+        // Page plan badge: the dashboard renders it as <span id="dashboard-plan">pro</span>;
+        // older pages spelled it inline as "Usage credits pro". Billing spells it "Pro".
+        const pagePlanMatch =
+            text.match(/usage credits\s+(free|pro|max|team)\b/i) ||
+            html.match(/id=["']dashboard-plan["'][^>]*>\s*([A-Za-z]+)/i) ||
+            html.match(/id=["']dashboard-plan["'][^>]*>\s*<[^>]+>\s*([A-Za-z]+)/i);
         const pagePlan = pagePlanMatch
             ? pagePlanMatch[1].charAt(0).toUpperCase() + pagePlanMatch[1].slice(1).toLowerCase()
             : '';
@@ -332,11 +385,18 @@ export class OllamaSettingsFetcher extends UsageFetcher {
     /**
      * Seconds in the billing cycle ending at the given reset date
      * (same calendar day one month earlier; robust across month lengths).
+     * Uses UTC noon so DST transitions cannot skew the window by an hour.
+     * Segundos en el ciclo de facturación que termina en la fecha dada
+     * (mismo día del mes anterior; robusto ante meses de distinta duración).
+     * Usa mediodía UTC para que los cambios de horario no desvíen la ventana.
      */
     _monthSeconds(resetDate) {
-        const start = new Date(resetDate.getTime());
-        start.setMonth(start.getMonth() - 1);
-        return Math.max(7 * 24 * 3600, Math.round((resetDate.getTime() - start.getTime()) / 1000));
+        const y = resetDate.getFullYear();
+        const m = resetDate.getMonth();
+        const d = resetDate.getDate();
+        const end = Date.UTC(y, m, d, 12);
+        const start = Date.UTC(y, m - 1, d, 12);
+        return Math.max(7 * 24 * 3600, Math.round((end - start) / 1000));
     }
 
     /**

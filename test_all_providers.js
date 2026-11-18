@@ -1175,6 +1175,48 @@ if (ollamaCurrent.usage.loginMethod !== "Ollama Cloud Pro") {
 }
 console.log("✓ Ollama Cloud current credit layout parses used/refill amounts and date");
 
+// Ollama Cloud dashboard layout (Nov 2026): the usage card moved to /dashboard
+// and shows REMAINING monthly credits plus the refill target, so
+// used = refill - remaining.
+const dashboardDate = new Date(Date.now() + 21 * 24 * 3600 * 1000);
+const dashboardDateStr = dashboardDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+const dashboardShort = dashboardDate.toLocaleDateString([], { month: "short", day: "numeric" });
+const ollamaDashboardHtml = `
+  <section aria-label="Usage">
+    <div class="flex">Usage credits</div>
+    <p>Monthly credits refill in 3 weeks</p>
+    <span id="dashboard-plan" class="badge">pro</span>
+    <p id="dashboard-included"><span id="usage-credits-balance">$47.50</span></p>
+    <span id="usage-credits-breakdown">
+      <span><span>Monthly credits</span><span>$47.50</span></span>
+      <span>Refills to $60 on ${dashboardDateStr}. Unused monthly credits that are part of the subscription do not carry over.</span>
+      <span><span>Added credits</span><span id="extra-usage-balance">$0</span></span>
+    </span>
+    <div>Used this month</div>
+    <p id="dashboard-usage">$12.50</p>
+  </section>`;
+const ollamaDashboard = ollamaFetcher._parseSettingsHtml(ollamaDashboardHtml);
+const dashWin = ollamaDashboard.usage.primary;
+if (!dashWin) {
+  throw new Error("Ollama dashboard layout should produce a primary tier");
+}
+if (Math.abs(dashWin.usedPercent - (12.5 / 60) * 100) > 0.0001) {
+  throw new Error(`Expected 20.83% used from remaining credits, got ${dashWin.usedPercent}%`);
+}
+if (!dashWin.resetDescription.includes("$12.50 / $60.00")) {
+  throw new Error(`Expected used/limit amounts, got "${dashWin.resetDescription}"`);
+}
+if (!dashWin.resetDescription.includes(`Resets ${dashboardShort}`)) {
+  throw new Error(`Expected dashboard refill date, got "${dashWin.resetDescription}"`);
+}
+if (ollamaDashboard.labels[0] !== "Monthly credits") {
+  throw new Error(`Expected "Monthly credits" label, got "${ollamaDashboard.labels[0]}"`);
+}
+if (ollamaDashboard.usage.loginMethod !== "Ollama Cloud Pro") {
+  throw new Error(`Expected dashboard plan badge to yield Pro, got ${ollamaDashboard.usage.loginMethod}`);
+}
+console.log("✓ Ollama Cloud dashboard layout derives used credits from remaining + refill");
+
 // Labels come from the CLI JSON; the text output is only a fallback and its
 // "Pace:" lines are not window labels.
 const jsonLabels = extractWindowLabels({ rateWindowLabels: { primary: "Session", secondary: "Weekly" } });
