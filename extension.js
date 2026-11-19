@@ -985,12 +985,19 @@ export default class CodexBarExtension extends Extension {
     const shown = (this._providers || [])
       .map((provider, index) => ({ provider, entry: this._providersData[index] }))
       .filter(({ provider }) => provider.showInPanel);
+    const primaryProvider = this._primaryProvider();
+    const primaryIndex = primaryProvider
+      ? (this._providers || []).indexOf(primaryProvider)
+      : -1;
+    const panelEntry =
+      primaryIndex >= 0 ? this._providersData?.[primaryIndex] : null;
+    const hasPanelValue = !!panelEntry?.data?.usage;
 
     this._iconBox.visible = shown.length === 0;
     this._panelTextBox.visible = shown.length > 0;
     this._panelTextBox.destroy_all_children();
     if (this._percentLabel) {
-      this._percentLabel.visible = shown.length === 0;
+      this._percentLabel.visible = shown.length === 0 && hasPanelValue;
       this._percentLabel.set_text(
         `${formatPercent(Math.round(this._activePercent ?? 0))}%`,
       );
@@ -1183,6 +1190,18 @@ export default class CodexBarExtension extends Extension {
   _updateUI() {
     if (!this._indicator) return;
 
+    // Resolve the panel value before rendering it: _updatePanel() reads
+    // _activePercent, which otherwise lags one render behind the data.
+    const primaryProvider = this._primaryProvider();
+    const primaryIndex = primaryProvider
+      ? (this._providers || []).indexOf(primaryProvider)
+      : -1;
+    const panelPercent =
+      primaryIndex >= 0
+        ? this._usagePercent(this._providersData[primaryIndex])
+        : 0;
+    this._activePercent = panelPercent;
+
     this._updatePanel();
     this._tabsContainer.destroy_all_children();
     this._contentBox.destroy_all_children();
@@ -1211,15 +1230,6 @@ export default class CodexBarExtension extends Extension {
     const creditsPercent = deriveCreditsPercent(
       normalizeDetailSections(activeData?.data?.usage?.details),
     );
-
-    // The panel tracks one provider, not whichever tab happens to be open.
-    const primaryProvider = this._primaryProvider();
-    const primaryIndex = primaryProvider
-      ? this._providers.indexOf(primaryProvider)
-      : -1;
-    const panelPercent =
-      primaryIndex >= 0 ? this._usagePercent(this._providersData[primaryIndex]) : 0;
-    this._activePercent = panelPercent;
 
     const showLogos = this._settings.get_boolean("show-logos");
 
