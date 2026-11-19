@@ -911,13 +911,20 @@ export default class CodexBarExtension extends Extension {
   }
 
   /**
-   * The provider the panel battery tracks.
+   * The provider the panel battery tracks. An explicit preference pins it;
+   * otherwise the panel follows the provider selected in the popup.
    */
   _primaryProvider() {
     const providers = this._providers || [];
     if (providers.length === 0) return null;
     const wanted = this._settings?.get_string("primary-provider") || "";
-    return providers.find((provider) => provider.id === wanted) || providers[0];
+    const pinned = providers.find((provider) => provider.id === wanted);
+    if (pinned) return pinned;
+    const index = Math.min(
+      Math.max(this._activeProviderIndex || 0, 0),
+      providers.length - 1,
+    );
+    return providers[index];
   }
 
   /**
@@ -985,12 +992,19 @@ export default class CodexBarExtension extends Extension {
     const shown = (this._providers || [])
       .map((provider, index) => ({ provider, entry: this._providersData[index] }))
       .filter(({ provider }) => provider.showInPanel);
+    const primaryProvider = this._primaryProvider();
+    const primaryIndex = primaryProvider
+      ? (this._providers || []).indexOf(primaryProvider)
+      : -1;
+    const panelEntry =
+      primaryIndex >= 0 ? this._providersData?.[primaryIndex] : null;
+    const hasPanelValue = !!panelEntry?.data?.usage;
 
     this._iconBox.visible = shown.length === 0;
     this._panelTextBox.visible = shown.length > 0;
     this._panelTextBox.destroy_all_children();
     if (this._percentLabel) {
-      this._percentLabel.visible = shown.length === 0;
+      this._percentLabel.visible = shown.length === 0 && hasPanelValue;
       this._percentLabel.set_text(
         `${formatPercent(Math.round(this._activePercent ?? 0))}%`,
       );
@@ -1183,6 +1197,20 @@ export default class CodexBarExtension extends Extension {
   _updateUI() {
     if (!this._indicator) return;
 
+    // Resolve the panel value before rendering it: _updatePanel() reads
+    // _activePercent, which otherwise lags one render behind the data.
+    const providers = this._providers || [];
+    const pinnedProviderId = this._settings.get_string("primary-provider") || "";
+    const primaryProvider = this._primaryProvider();
+    const primaryIndex = primaryProvider
+      ? providers.indexOf(primaryProvider)
+      : -1;
+    const panelPercent =
+      primaryIndex >= 0
+        ? this._usagePercent(this._providersData[primaryIndex])
+        : 0;
+    this._activePercent = panelPercent;
+
     this._updatePanel();
     this._tabsContainer.destroy_all_children();
     this._contentBox.destroy_all_children();
@@ -1211,15 +1239,6 @@ export default class CodexBarExtension extends Extension {
     const creditsPercent = deriveCreditsPercent(
       normalizeDetailSections(activeData?.data?.usage?.details),
     );
-
-    // The panel tracks one provider, not whichever tab happens to be open.
-    const primaryProvider = this._primaryProvider();
-    const primaryIndex = primaryProvider
-      ? this._providers.indexOf(primaryProvider)
-      : -1;
-    const panelPercent =
-      primaryIndex >= 0 ? this._usagePercent(this._providersData[primaryIndex]) : 0;
-    this._activePercent = panelPercent;
 
     const showLogos = this._settings.get_boolean("show-logos");
 
@@ -1280,9 +1299,12 @@ export default class CodexBarExtension extends Extension {
       });
       this._tabsContainer.add_child(btn);
 
+      // The dot marks a pinned panel provider; in Automatic mode the active
+      // tab already shows which provider the panel follows.
       if (
-        provider.id === primaryProvider?.id &&
-        this._providers.length > 1
+        pinnedProviderId &&
+        provider.id === pinnedProviderId &&
+        providers.length > 1
       ) {
         this._tabsContainer.add_child(
           new St.Widget({

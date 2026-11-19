@@ -1138,7 +1138,7 @@ const CodexBarPrefsPage = GObject.registerClass(
       const primaryRow = new Adw.ComboRow({
         title: _("Panel Provider"),
         subtitle: _(
-          "Provider whose usage fills the panel icon; Automatic tracks the first enabled one",
+          "Provider whose usage fills the panel icon; Automatic follows the selected provider",
         ),
       });
       this._refreshPrimaryRow = () => {
