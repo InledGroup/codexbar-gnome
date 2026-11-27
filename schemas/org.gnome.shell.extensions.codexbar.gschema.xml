@@ -38,7 +38,7 @@
     <key name="primary-provider" type="s">
       <default>''</default>
       <summary>Provider whose usage fills the panel icon</summary>
-      <description>Provider id, or an empty string to use the first enabled provider.</description>
+      <description>Provider id, or an empty string to follow the provider selected in the popup.</description>
     </key>
     <key name="dismissed-providers" type="s">
       <default>'[]'</default>

@@ -911,13 +911,20 @@ export default class CodexBarExtension extends Extension {
   }
 
   /**
-   * The provider the panel battery tracks.
+   * The provider the panel battery tracks. An explicit preference pins it;
+   * otherwise the panel follows the provider selected in the popup.
    */
   _primaryProvider() {
     const providers = this._providers || [];
     if (providers.length === 0) return null;
     const wanted = this._settings?.get_string("primary-provider") || "";
-    return providers.find((provider) => provider.id === wanted) || providers[0];
+    const pinned = providers.find((provider) => provider.id === wanted);
+    if (pinned) return pinned;
+    const index = Math.min(
+      Math.max(this._activeProviderIndex || 0, 0),
+      providers.length - 1,
+    );
+    return providers[index];
   }
 
   /**
@@ -1192,9 +1199,11 @@ export default class CodexBarExtension extends Extension {
 
     // Resolve the panel value before rendering it: _updatePanel() reads
     // _activePercent, which otherwise lags one render behind the data.
+    const providers = this._providers || [];
+    const pinnedProviderId = this._settings.get_string("primary-provider") || "";
     const primaryProvider = this._primaryProvider();
     const primaryIndex = primaryProvider
-      ? (this._providers || []).indexOf(primaryProvider)
+      ? providers.indexOf(primaryProvider)
       : -1;
     const panelPercent =
       primaryIndex >= 0
@@ -1290,9 +1299,12 @@ export default class CodexBarExtension extends Extension {
       });
       this._tabsContainer.add_child(btn);
 
+      // The dot marks a pinned panel provider; in Automatic mode the active
+      // tab already shows which provider the panel follows.
       if (
-        provider.id === primaryProvider?.id &&
-        this._providers.length > 1
+        pinnedProviderId &&
+        provider.id === pinnedProviderId &&
+        providers.length > 1
       ) {
         this._tabsContainer.add_child(
           new St.Widget({
