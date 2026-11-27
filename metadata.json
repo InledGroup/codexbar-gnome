@@ -1,7 +1,7 @@
 {
   "uuid": "codexbar@inled.es",
   "name": "CodexBar",
-  "description": "The port of Codexbar for GNOME. Featured on official codebar repo by steipete. All Codexbar CLI supported providers can be used here.",
+  "description": "Shows AI provider usage in the GNOME panel.\n\nUsage is read through the CodexBar CLI or the provider APIs (network access), and session tokens are kept in the system keyring. Install commands are copied to the clipboard only when you press Copy.\n\nAll providers supported by the CodexBar CLI can be used here.",
   "shell-version": ["48", "49", "50", "51"],
   "url": "https://github.com/InledGroup/codexbar-gnome",
   "settings-schema": "org.gnome.shell.extensions.codexbar",

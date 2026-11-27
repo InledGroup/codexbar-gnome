@@ -471,17 +471,24 @@ msgstr "Comando da CLI:"
 msgid "Reset Default"
 msgstr "Restaurar padrão"
 
-#: prefs.js:767
+#: prefs.js:809
 msgid ""
-"Antigravity requires a trusted local SSL certificate to work. So we have "
-"made a python script to help you do this in a single command:\n"
-"\n"
-"pip install codexbar-ssl-helper && codexbar-ssl-helper"
+"Antigravity requires a trusted local SSL certificate to work. Install the "
+"helper shown on the welcome screen; it installs to /usr/local/libexec and "
+"asks for admin rights only to add the certificate."
 msgstr ""
-"O Antigravity precisa de um certificado SSL local confiável. Fizemos um "
-"script Python que faz isso com um único comando:\n"
-"\n"
-"pip install codexbar-ssl-helper && codexbar-ssl-helper"
+"O Antigravity precisa de um certificado SSL local confiável. Instale o "
+"helper mostrado na tela de boas-vindas; ele é instalado em "
+"/usr/local/libexec e pede permissão de administrador apenas para adicionar "
+"o certificado."
+
+#: extension.js:235
+msgid "Refresh now"
+msgstr "Atualizar agora"
+
+#: extension.js:243
+msgid "Preferences"
+msgstr "Preferências"
 
 #: prefs.js:787
 msgid "Remove Provider"

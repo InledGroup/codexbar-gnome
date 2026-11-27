@@ -38,8 +38,9 @@ export function findCodexBar() {
  * Run a command and return stdout, with a hard timeout.
  * @param {string[]} argv
  * @param {(stdout: string) => void} onDone
+ * @param {Gio.Cancellable|null} cancellable Cancels the read and the process
  */
-function runCommand(argv, onDone) {
+function runCommand(argv, onDone, cancellable = null) {
   let proc;
   try {
     proc = Gio.Subprocess.new(
@@ -74,11 +75,12 @@ function runCommand(argv, onDone) {
     },
   );
 
-  proc.communicate_utf8_async(null, null, (source, result) => {
+  proc.communicate_utf8_async(null, cancellable, (source, result) => {
     try {
       const [, stdout] = source.communicate_utf8_finish(result);
       complete(stdout);
     } catch (e) {
+      if (!proc.get_if_exited()) proc.force_exit();
       complete("");
     }
   });
@@ -94,8 +96,9 @@ function runCommand(argv, onDone) {
  * @param {string} bin
  * @param {string[]} ids
  * @param {() => void} onDone
+ * @param {Gio.Cancellable|null} cancellable
  */
-function enableProviders(bin, ids, onDone) {
+function enableProviders(bin, ids, onDone, cancellable = null) {
   if (ids.length === 0) {
     onDone();
     return;
@@ -103,10 +106,14 @@ function enableProviders(bin, ids, onDone) {
 
   let remaining = ids.length;
   for (const id of ids) {
-    runCommand([bin, "config", "enable", "--provider", id], () => {
-      remaining -= 1;
-      if (remaining === 0) onDone();
-    });
+    runCommand(
+      [bin, "config", "enable", "--provider", id],
+      () => {
+        remaining -= 1;
+        if (remaining === 0) onDone();
+      },
+      cancellable,
+    );
   }
 }
 
@@ -119,9 +126,13 @@ function enableProviders(bin, ids, onDone) {
  * ones. Failures and timeouts degrade to the enabled list.
  *
  * @param {(providers: Array<{id: string, name: string}>) => void} onDone
- * @param {{skipIds?: string[]}} options Providers the user deliberately removed
+ * @param {{skipIds?: string[], cancellable?: Gio.Cancellable}} options
+ *   `skipIds`: providers the user deliberately removed
  */
-export function discoverEnabledProviders(onDone, { skipIds = [] } = {}) {
+export function discoverEnabledProviders(
+  onDone,
+  { skipIds = [], cancellable = null } = {},
+) {
   const finish = (providers) => onDone(Array.isArray(providers) ? providers : []);
   const skipped = new Set(Array.isArray(skipIds) ? skipIds : []);
 
@@ -171,6 +182,7 @@ export function discoverEnabledProviders(onDone, { skipIds = [] } = {}) {
       bin,
       toEnable.map((provider) => provider.id),
       merged,
+      cancellable,
     );
-  });
+  }, cancellable);
 }

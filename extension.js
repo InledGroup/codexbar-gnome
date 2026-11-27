@@ -60,6 +60,35 @@ const SECONDARY_TEXT_OPACITY = 200;
 // Width of the per-tab load underline. The fill is sized in pixels against it.
 const TAB_TRACK_WIDTH = 44;
 
+// Install commands shown on the welcome screen. The SSL helper is installed
+// root-owned under /usr/local/libexec so the privileged part it runs with
+// pkexec is not an executable the user can modify.
+const COOKIE_IMPORTER_URL =
+  "https://raw.githubusercontent.com/InledGroup/codexbar-gnome/main/scripts/codexbar-cookie-importer";
+const SSL_HELPER_URL =
+  "https://raw.githubusercontent.com/InledGroup/codexbar-gnome/main/scripts/codexbar-ssl-helper";
+const SSL_HELPER_COMMAND = [
+  `curl -fsSL ${SSL_HELPER_URL} -o /tmp/codexbar-ssl-helper`,
+  "pkexec install -D -o root -g root -m 0755 /tmp/codexbar-ssl-helper /usr/local/libexec/codexbar-ssl-helper",
+  "rm -f /tmp/codexbar-ssl-helper",
+  "/usr/local/libexec/codexbar-ssl-helper",
+].join(" && ");
+
+/**
+ * A tier with usedPercent 0 and no window is a placeholder, not a usage window
+ * (e.g. OpenRouter's balance), so callers derive the real value elsewhere.
+ * @param {object|undefined} tierData
+ * @returns {boolean}
+ */
+function isPlaceholderTier(tierData) {
+  return (
+    !!tierData &&
+    !tierData.windowSeconds &&
+    tierData.usedPercent === 0 &&
+    !tierData.resetDescription
+  );
+}
+
 /**
  * Build a dimmed secondary label.
  * @param {object} params Extra St.Label properties.
@@ -202,6 +231,7 @@ export default class CodexBarExtension extends Extension {
       child: refreshContent,
       style_class: "codexbar-header-button",
       y_align: Clutter.ActorAlign.CENTER,
+      accessible_name: _("Refresh now"),
     });
     connect(this._refreshBtn, "clicked", () => this._requestRefresh());
     this._headerBox.add_child(this._refreshBtn);
@@ -213,6 +243,7 @@ export default class CodexBarExtension extends Extension {
       }),
       style_class: "codexbar-header-button",
       y_align: Clutter.ActorAlign.CENTER,
+      accessible_name: _("Preferences"),
     });
     settingsBtn.connect("clicked", () => {
       this.openPreferences();
@@ -356,6 +387,7 @@ export default class CodexBarExtension extends Extension {
     this._aboutDialog = null;
     this._aboutDialogSignalId = 0;
     this._cancellable = new Gio.Cancellable();
+    this._discoveryCancellable = null;
     this._cost = null;
     this._costLoading = false;
 
@@ -470,6 +502,10 @@ export default class CodexBarExtension extends Extension {
       this._cancellable.cancel();
       this._cancellable = null;
     }
+    if (this._discoveryCancellable) {
+      this._discoveryCancellable.cancel();
+      this._discoveryCancellable = null;
+    }
 
     if (this._timeoutId) {
       GLib.source_remove(this._timeoutId);
@@ -561,14 +597,6 @@ export default class CodexBarExtension extends Extension {
       this._indicator.destroy();
       this._indicator = null;
     }
-    if (this._panelTextBox) {
-      this._panelTextBox.destroy();
-      this._panelTextBox = null;
-    }
-    if (this._panelBox) {
-      this._panelBox.destroy();
-      this._panelBox = null;
-    }
 
     this._providersData = [];
     this._activeProviderIndex = 0;
@@ -596,6 +624,8 @@ export default class CodexBarExtension extends Extension {
       dismissed = [];
     }
 
+    if (!this._discoveryCancellable)
+      this._discoveryCancellable = new Gio.Cancellable();
     discoverEnabledProviders(
       (discovered) => {
         if (!this._settings) return;
@@ -628,7 +658,7 @@ export default class CodexBarExtension extends Extension {
           this._settings.set_boolean("first-run", false);
         }
       },
-      { skipIds: dismissed },
+      { skipIds: dismissed, cancellable: this._discoveryCancellable },
     );
   }
 
@@ -720,7 +750,8 @@ export default class CodexBarExtension extends Extension {
    * Refresh usage data for all enabled providers.
    */
   async _refreshData() {
-    if (this._loading || this._providers.length === 0) return;
+    if (!this._settings || this._loading || this._providers.length === 0)
+      return;
     this._loading = true;
     this._lastRefreshAt = Date.now();
     this._startRefreshSpinner();
@@ -813,6 +844,11 @@ export default class CodexBarExtension extends Extension {
     const nextData = new Array(this._providers.length);
 
     for (let i = 0; i < this._providers.length; i++) {
+      // The extension may have been disabled while an await was in flight.
+      if (!this._settings || !this._apiClient) {
+        this._finishRefresh();
+        return;
+      }
       const provider = this._providers[i];
 
       if (provider.useApi) {
@@ -1020,19 +1056,14 @@ export default class CodexBarExtension extends Extension {
     const creditsPercent = deriveCreditsPercent(
       normalizeDetailSections(usage.details),
     );
-    const degenerate = (tierData) =>
-      !!tierData &&
-      !tierData.windowSeconds &&
-      tierData.usedPercent === 0 &&
-      !tierData.resetDescription;
 
     let total = 0;
     let count = 0;
     for (const tier of ["primary", "secondary", "tertiary", "quaternary"]) {
       const tierData = usage[tier];
       if (!tierData || tierData.usedPercent === undefined) continue;
-      if (degenerate(tierData) && creditsPercent === null) continue;
-      const percent = degenerate(tierData)
+      if (isPlaceholderTier(tierData) && creditsPercent === null) continue;
+      const percent = isPlaceholderTier(tierData)
         ? creditsPercent
         : this._normalizePercent(tierData.usedPercent);
       total += displayMode === "remaining" ? 100 - percent : percent;
@@ -1257,8 +1288,7 @@ export default class CodexBarExtension extends Extension {
   }
 
   /**
-   * Normalize percentage value.
-   * Normalize a percentage value.
+   * Clamp a percentage into the 0-100 range.
    */
   _normalizePercent(value) {
     if (value === undefined || value === null) return 0;
@@ -1326,11 +1356,6 @@ export default class CodexBarExtension extends Extension {
     // A tier with usedPercent:0 and no windowSeconds isn't a real usage window
     // (e.g. OpenRouter's balance placeholder), so _usagePercent() derives a
     // meaningful percent from Credits instead.
-    const isDegenerateTier = (tierData) =>
-      !!tierData &&
-      !tierData.windowSeconds &&
-      tierData.usedPercent === 0 &&
-      !tierData.resetDescription;
     const creditsPercent = deriveCreditsPercent(
       normalizeDetailSections(activeData?.data?.usage?.details),
     );
@@ -1558,7 +1583,7 @@ export default class CodexBarExtension extends Extension {
         _,
       );
 
-      if (isDegenerateTier(tierData)) {
+      if (isPlaceholderTier(tierData)) {
         if (creditsPercent === null) {
           tierData = null;
         } else {
@@ -1599,16 +1624,7 @@ export default class CodexBarExtension extends Extension {
             ? _("%s%% left").format(formatPercent(percent))
             : _("%s%% used").format(formatPercent(percent));
 
-        let color = "#3584e4";
-        if (displayMode === "remaining") {
-          if (percent < 10) color = "#e01b24";
-          else if (percent < 25) color = "#ff7800";
-          else if (percent < 50) color = "#f6d32d";
-        } else {
-          if (percent > 90) color = "#e01b24";
-          else if (percent > 75) color = "#ff7800";
-          else if (percent > 50) color = "#f6d32d";
-        }
+        const color = this._usageColor(percent);
 
         const barWidth = Math.max(1, Math.round((percent / 100) * fullWidth));
 
@@ -2135,24 +2151,35 @@ export default class CodexBarExtension extends Extension {
       label: _("Copy"),
     });
     copyBtn.connect("clicked", () => {
-      // Written only on this explicit user click; the metadata description
-      // declares the clipboard access for the reviewer.
       const clipboard = St.Clipboard.get_default();
       clipboard.set_text(St.ClipboardType.CLIPBOARD, commandText);
       copyBtn.label = _("Copied!");
-      let timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
+
+      // The reset source belongs to this button: if the popup is rebuilt
+      // before it fires, destroying the button removes the source instead of
+      // writing to a destroyed actor.
+      let sourceId = 0;
+      const forget = (id) => {
+        const list = this._copyTimeouts;
+        const index = list ? list.indexOf(id) : -1;
+        if (index > -1) list.splice(index, 1);
+      };
+      sourceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
+        const id = sourceId;
+        sourceId = 0;
+        forget(id);
         copyBtn.label = _("Copy");
-        if (this._copyTimeouts) {
-          const index = this._copyTimeouts.indexOf(timeoutId);
-          if (index > -1) {
-            this._copyTimeouts.splice(index, 1);
-          }
-        }
         return GLib.SOURCE_REMOVE;
       });
-      if (this._copyTimeouts) {
-        this._copyTimeouts.push(timeoutId);
-      }
+      this._copyTimeouts?.push(sourceId);
+      copyBtn.connect("destroy", () => {
+        if (!sourceId) return;
+        // disable() already removed every tracked source.
+        if (!this._copyTimeouts) return;
+        forget(sourceId);
+        GLib.source_remove(sourceId);
+        sourceId = 0;
+      });
     });
     box.add_child(copyBtn);
 
@@ -2293,7 +2320,9 @@ export default class CodexBarExtension extends Extension {
     if (!importerExists) {
       dep2Box.add_child(
         this._createCommandWithCopyButton(
-          "mkdir -p ~/.local/bin && curl -fsSL https://raw.githubusercontent.com/InledGroup/codexbar-gnome/main/scripts/codexbar-cookie-importer -o ~/.local/bin/codexbar-cookie-importer && chmod +x ~/.local/bin/codexbar-cookie-importer",
+          `mkdir -p ~/.local/bin && curl -fsSL ${COOKIE_IMPORTER_URL}` +
+            " -o ~/.local/bin/codexbar-cookie-importer" +
+            " && chmod +x ~/.local/bin/codexbar-cookie-importer",
         ),
       );
     }
@@ -2338,9 +2367,7 @@ export default class CodexBarExtension extends Extension {
 
     if (!certInstalled) {
       dep3Box.add_child(
-        this._createCommandWithCopyButton(
-          "mkdir -p ~/.local/bin && curl -fsSL https://raw.githubusercontent.com/InledGroup/codexbar-gnome/main/scripts/codexbar-ssl-helper -o ~/.local/bin/codexbar-ssl-helper && chmod +x ~/.local/bin/codexbar-ssl-helper && codexbar-ssl-helper",
-        ),
+        this._createCommandWithCopyButton(SSL_HELPER_COMMAND),
       );
     }
     box.add_child(dep3Box);

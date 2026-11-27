@@ -431,13 +431,14 @@ const CodexBarPrefsPage = GObject.registerClass(
 
     /**
      * Build the AI providers configuration group.
-     * Builds the AI providers settings group.
      */
     _buildProvidersGroup() {
       const group = new Adw.PreferencesGroup({
         title: _("AI Providers"),
         description: _(
-          "Enable providers and pick how each one connects. Direct API uses session cookies from your keyring; the other choices run codexbar-cli with that --source. Antigravity also needs the plugin.",
+          "Enable providers and pick how each one connects. Direct API uses " +
+            "session cookies from your keyring; the other choices run " +
+            "codexbar-cli with that --source. Antigravity also needs the plugin.",
         ),
       });
 
@@ -791,7 +792,8 @@ const CodexBarPrefsPage = GObject.registerClass(
               }
               const lsofLabel = new Gtk.Label({
                 label: _(
-                  `Antigravity requires the 'lsof' utility to detect the local server ports. Run this command to install it:\n\n${lsofCmd}`,
+                  "Antigravity requires the 'lsof' utility to detect the local " +
+                    `server ports. Run this command to install it:\n\n${lsofCmd}`,
                 ),
                 xalign: 0,
                 use_markup: false,
@@ -802,10 +804,15 @@ const CodexBarPrefsPage = GObject.registerClass(
               cliBox.append(lsofLabel);
             }
 
-            // Antigravity SSL certificate setup instruction
+            // Antigravity SSL certificate setup instruction. The helper is
+            // installed root-owned under /usr/local/libexec, so the privileged
+            // copy it runs with pkexec is not user-writable.
             const certLabel = new Gtk.Label({
               label: _(
-                "Antigravity requires a trusted local SSL certificate to work. So we have made a python script to help you do this in a single command:\n\npip install codexbar-ssl-helper && codexbar-ssl-helper",
+                "Antigravity requires a trusted local SSL certificate to work. " +
+                  "Install the helper shown on the welcome screen; it installs " +
+                  "to /usr/local/libexec and asks for admin rights only to add " +
+                  "the certificate.",
               ),
               xalign: 0,
               use_markup: false,
