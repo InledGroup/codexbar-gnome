@@ -34,6 +34,9 @@ export const parseMo = (data) => {
   return catalog;
 };
 
+/** Whether `lang` ships a catalog in this extension. */
+export const supportedLanguage = (lang) => SUPPORTED_LANGUAGES.includes(lang);
+
 /** Install the catalog for `lang`; `en` (or no catalog) keeps the msgids. */
 export const setCatalog = (lang, catalog) => {
   _language = SUPPORTED_LANGUAGES.includes(lang) ? lang : "en";

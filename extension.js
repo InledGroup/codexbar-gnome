@@ -33,14 +33,15 @@ import {
   usageUrl,
 } from "./links.js";
 import {
-  applyLanguage,
   currentLanguage,
   formatPanelText,
   formatPercent,
   formatReset,
   localizeDetail,
   localizeLabel,
+  parseMo,
   setCatalog,
+  supportedLanguage,
   tr as _,
 } from "./localize.js";
 
@@ -74,6 +75,49 @@ function subtitleLabel(params) {
 }
 
 /**
+ * Status line: a symbolic icon plus its text, so a state is never conveyed by
+ * an ASCII glyph or emoji (GNOME extensions UI guidelines: icons vs emojis).
+ * @param {string} text State text.
+ * @param {string} color Theme colour shared by icon and text.
+ * @param {string} iconName Symbolic icon name.
+ * @returns {St.BoxLayout}
+ */
+function statusLabel(text, color, iconName) {
+  const box = new St.BoxLayout({
+    orientation: Clutter.Orientation.HORIZONTAL,
+    y_align: Clutter.ActorAlign.CENTER,
+    style: "spacing: 4px;",
+  });
+  box.add_child(
+    new St.Icon({
+      icon_name: iconName,
+      icon_size: 12,
+      style: `color: ${color};`,
+      y_align: Clutter.ActorAlign.CENTER,
+    }),
+  );
+  box.add_child(
+    new St.Label({
+      text,
+      style: `color: ${color}; font-size: 0.85em; font-weight: bold;`,
+      y_align: Clutter.ActorAlign.CENTER,
+    }),
+  );
+  return box;
+}
+
+/** Open a URI in the user's browser; returns false when no handler exists. */
+function openUri(uri) {
+  try {
+    Gio.AppInfo.launch_default_for_uri(uri, null);
+    return true;
+  } catch (e) {
+    console.error(`[CodexBar] could not open ${uri}: ${e}`);
+    return false;
+  }
+}
+
+/**
  * Main extension class for CodexBar.
  */
 export default class CodexBarExtension extends Extension {
@@ -85,8 +129,14 @@ export default class CodexBarExtension extends Extension {
     this._settings = this.getSettings();
     this._apiClient = new UsageApiClient(this.path);
     this._copyTimeouts = [];
+    this._signals = [];
 
-    this._applyLanguage();
+    // Track shell signal handlers so disable() can remove them explicitly.
+    const connect = (object, signal, callback) => {
+      this._signals.push([object, object.connect(signal, callback)]);
+    };
+
+    this._applyLanguage(() => this._renderLocalizedUI());
     this._indicator = new PanelMenu.Button(0.0, _("CodexBar"), false);
 
     this._iconBox = new St.BoxLayout({
@@ -144,23 +194,16 @@ export default class CodexBarExtension extends Extension {
       icon_name: "view-refresh-symbolic",
       icon_size: 16,
     });
-    // A tiny rotating glyph keeps the button useful while the CLI runs; St
-    // has no spinner widget of its own.
-    this._refreshSpinner = new St.Label({
-      text: "◐",
-      style_class: "codexbar-refresh-spinner",
-      visible: false,
-      y_align: Clutter.ActorAlign.CENTER,
-    });
+    // St ships no spinner widget; the refresh icon itself is rotated while a
+    // refresh runs (icons instead of the ASCII spinner glyphs used before).
     refreshContent.add_child(this._refreshIcon);
-    refreshContent.add_child(this._refreshSpinner);
 
     this._refreshBtn = new St.Button({
       child: refreshContent,
       style_class: "codexbar-header-button",
       y_align: Clutter.ActorAlign.CENTER,
     });
-    this._refreshBtn.connect("clicked", () => this._requestRefresh());
+    connect(this._refreshBtn, "clicked", () => this._requestRefresh());
     this._headerBox.add_child(this._refreshBtn);
 
     let settingsBtn = new St.Button({
@@ -234,7 +277,7 @@ export default class CodexBarExtension extends Extension {
       initialHScroll.reactive = false;
     }
 
-    this._tabsScroll.connect("enter-event", (_actor, event) => {
+    connect(this._tabsScroll, "enter-event", (_actor, event) => {
       const related = event.get_related();
       if (!related || !this._tabsScroll.contains(related)) {
         setScrollbarVisible(true);
@@ -242,7 +285,7 @@ export default class CodexBarExtension extends Extension {
       return Clutter.EVENT_PROPAGATE;
     });
 
-    this._tabsScroll.connect("leave-event", (_actor, event) => {
+    connect(this._tabsScroll, "leave-event", (_actor, event) => {
       const related = event.get_related();
       if (!related || !this._tabsScroll.contains(related)) {
         setScrollbarVisible(false);
@@ -250,11 +293,11 @@ export default class CodexBarExtension extends Extension {
       return Clutter.EVENT_PROPAGATE;
     });
 
-    this._tabsScroll.connect("notify::hover", () => {
+    connect(this._tabsScroll, "notify::hover", () => {
       setScrollbarVisible(this._tabsScroll.hover);
     });
 
-    this._tabsScroll.connect("scroll-event", (_actor, event) => {
+    connect(this._tabsScroll, "scroll-event", (_actor, event) => {
       setScrollbarVisible(true);
       const hadj = this._tabsScroll.get_hadjustment();
       if (!hadj) return Clutter.EVENT_PROPAGATE;
@@ -311,15 +354,14 @@ export default class CodexBarExtension extends Extension {
     this._loading = false;
     this._lastRefreshAt = 0;
     this._aboutDialog = null;
+    this._aboutDialogSignalId = 0;
     this._cancellable = new Gio.Cancellable();
     this._cost = null;
     this._costLoading = false;
-    this._spinnerTimeout = null;
-    this._spinnerFrame = 0;
 
     // Opening the popup is a signal that the user wants current numbers; the
     // timer alone can be up to `refresh-interval` minutes old.
-    this._indicator.menu.connect("open-state-changed", (_menu, isOpen) => {
+    connect(this._indicator.menu, "open-state-changed", (_menu, isOpen) => {
       if (!isOpen) {
         setScrollbarVisible(false);
         return;
@@ -342,9 +384,7 @@ export default class CodexBarExtension extends Extension {
       },
       "changed::first-run", () => this._updateUI(),
       "changed::language", () => {
-        this._applyLanguage();
-        this._updateUI();
-        this._requestRefresh();
+        this._applyLanguage(() => this._renderLocalizedUI());
       },
       "changed::dev-custom-output-enabled", () => this._onSettingsChanged(),
       "changed::dev-custom-output-provider-name", () => this._onSettingsChanged(),
@@ -362,17 +402,53 @@ export default class CodexBarExtension extends Extension {
   }
 
   // Load the catalog for the `language` setting; English is the fallback.
-  _applyLanguage() {
+  // The .mo is read asynchronously so enable() never blocks on disk I/O.
+  _applyLanguage(onDone) {
     const domain = this.metadata["gettext-domain"] ?? this.uuid;
-    applyLanguage(this._settings.get_string("language"), (lang) => {
-      const mo = this.dir
-        .get_child("locale")
-        .get_child(lang)
-        .get_child("LC_MESSAGES")
-        .get_child(`${domain}.mo`);
-      return mo.query_exists(null) ? mo.load_contents(null)[1] : null;
+    const lang = this._settings.get_string("language");
+
+    if (lang === "en" || !supportedLanguage(lang)) {
+      setCatalog("en", null);
+      onDone?.();
+      return;
+    }
+
+    const mo = this.dir
+      .get_child("locale")
+      .get_child(lang)
+      .get_child("LC_MESSAGES")
+      .get_child(`${domain}.mo`);
+
+    mo.load_contents_async(null, (file, res) => {
+      let bytes = null;
+      try {
+        [, bytes] = file.load_contents_finish(res);
+      } catch (e) {
+        bytes = null;
+      }
+
+      // A later language change, or disable(), owns the UI by now.
+      if (!this._settings || this._settings.get_string("language") !== lang)
+        return;
+
+      setCatalog(lang, bytes ? parseMo(bytes) : null);
+      if (bytes) logDev(`UI language: ${currentLanguage()}`);
+      onDone?.();
     });
-    logDev(`UI language: ${currentLanguage()}`);
+  }
+
+  /**
+   * Re-render the text created at enable time once the async catalog arrives.
+   */
+  _renderLocalizedUI() {
+    if (!this._settings || !this._indicator) return;
+    if (this._footerSection) {
+      this._footerSection.removeAll();
+      this._buildFooter();
+    }
+    this._updateUI();
+    this._updatePanel();
+    this._requestRefresh();
   }
 
   /**
@@ -380,6 +456,11 @@ export default class CodexBarExtension extends Extension {
    * Se llama cuando la extensión se desactiva.
    */
   disable() {
+    if (this._signals) {
+      for (const [object, id] of this._signals) object.disconnect(id);
+      this._signals = null;
+    }
+
     if (this._apiClient) {
       this._apiClient.destroy();
       this._apiClient = null;
@@ -402,15 +483,21 @@ export default class CodexBarExtension extends Extension {
       this._copyTimeouts.forEach((id) => GLib.source_remove(id));
       this._copyTimeouts = null;
     }
-    if (this._spinnerTimeout) {
-      GLib.source_remove(this._spinnerTimeout);
-      this._spinnerTimeout = null;
+    if (this._refreshIcon) {
+      this._refreshIcon.remove_all_transitions();
+      this._refreshIcon.destroy();
+      this._refreshIcon = null;
     }
-    this._refreshSpinner = null;
-    this._refreshIcon = null;
-    this._refreshBtn = null;
+    if (this._refreshBtn) {
+      this._refreshBtn.destroy();
+      this._refreshBtn = null;
+    }
 
     if (this._aboutDialog) {
+      if (this._aboutDialogSignalId) {
+        this._aboutDialog.disconnect(this._aboutDialogSignalId);
+        this._aboutDialogSignalId = 0;
+      }
       this._aboutDialog.close();
       this._aboutDialog.destroy();
       this._aboutDialog = null;
@@ -450,17 +537,26 @@ export default class CodexBarExtension extends Extension {
       this._headerBox.destroy();
       this._headerBox = null;
     }
+    if (this._tabsContainer) {
+      this._tabsContainer.destroy();
+      this._tabsContainer = null;
+    }
     if (this._tabsScroll) {
       this._tabsScroll.destroy();
       this._tabsScroll = null;
     }
-    this._tabsContainer = null;
     if (this._contentBox) {
       this._contentBox.destroy();
       this._contentBox = null;
     }
-    this._historySection = null;
-    this._footerSection = null;
+    if (this._historySection) {
+      this._historySection.destroy();
+      this._historySection = null;
+    }
+    if (this._footerSection) {
+      this._footerSection.destroy();
+      this._footerSection = null;
+    }
     if (this._indicator) {
       this._indicator.destroy();
       this._indicator = null;
@@ -537,34 +633,23 @@ export default class CodexBarExtension extends Extension {
   }
 
   _startRefreshSpinner() {
-    if (!this._refreshSpinner || !this._refreshIcon) return;
-    this._refreshIcon.visible = false;
-    this._refreshSpinner.visible = true;
-    if (this._spinnerTimeout) return;
-    const frames = ["◐", "◓", "◑", "◒"];
-    this._spinnerFrame = 0;
-    this._spinnerTimeout = GLib.timeout_add(
-      GLib.PRIORITY_DEFAULT,
-      140,
-      () => {
-        if (!this._refreshSpinner) {
-          this._spinnerTimeout = null;
-          return GLib.SOURCE_REMOVE;
-        }
-        this._spinnerFrame = (this._spinnerFrame + 1) % frames.length;
-        this._refreshSpinner.set_text(frames[this._spinnerFrame]);
-        return GLib.SOURCE_CONTINUE;
-      },
-    );
+    if (!this._refreshIcon) return;
+    // Drop any previous rotation before starting a new one, so repeated
+    // refreshes never stack transitions on the icon.
+    this._refreshIcon.remove_transition("rotation-angle-z");
+    this._refreshIcon.rotation_angle_z = 0;
+    this._refreshIcon.ease({
+      rotation_angle_z: 360,
+      duration: 1200,
+      mode: Clutter.AnimationMode.LINEAR,
+      repeat_count: -1,
+    });
   }
 
   _stopRefreshSpinner() {
-    if (this._spinnerTimeout) {
-      GLib.source_remove(this._spinnerTimeout);
-      this._spinnerTimeout = null;
-    }
-    if (this._refreshIcon) this._refreshIcon.visible = true;
-    if (this._refreshSpinner) this._refreshSpinner.visible = false;
+    if (!this._refreshIcon) return;
+    this._refreshIcon.remove_transition("rotation-angle-z");
+    this._refreshIcon.rotation_angle_z = 0;
   }
 
   _finishRefresh() {
@@ -600,8 +685,11 @@ export default class CodexBarExtension extends Extension {
    * Set up the auto-refresh timer.
    */
   _setupTimeout() {
+    // Clear the previous source first, including when the new interval is 0,
+    // so disable() never removes an already-removed id.
     if (this._timeoutId) {
       GLib.source_remove(this._timeoutId);
+      this._timeoutId = null;
     }
     const interval = this._settings.get_int("refresh-interval") * 60 * 1000;
     if (interval > 0) {
@@ -1022,18 +1110,42 @@ export default class CodexBarExtension extends Extension {
         segment.add_child(logo);
       }
 
-      let text;
-      if (!entry) text = "…";
-      else if (entry.error && !entry.data) text = "!";
-      else {
+      if (!entry) {
+        segment.add_child(
+          new St.Label({
+            text: logo ? "…" : `${provider.name} …`,
+            y_align: Clutter.ActorAlign.CENTER,
+          }),
+        );
+      } else if (entry.error && !entry.data) {
+        // A failed provider shows a warning icon instead of an ASCII "!".
+        if (!logo) {
+          segment.add_child(
+            new St.Label({
+              text: provider.name,
+              y_align: Clutter.ActorAlign.CENTER,
+            }),
+          );
+        }
+        segment.add_child(
+          new St.Icon({
+            icon_name: "dialog-warning-symbolic",
+            icon_size: 12,
+            style: "color: #ff7800;",
+            y_align: Clutter.ActorAlign.CENTER,
+          }),
+        );
+      } else {
         const elapsed = (Date.now() - (entry.fetchedAt || Date.now())) / 1000;
-        text = formatPanelText(entry.data?.usage, displayMode, elapsed, _) || "–";
+        const text =
+          formatPanelText(entry.data?.usage, displayMode, elapsed, _) || "–";
+        segment.add_child(
+          new St.Label({
+            text: logo ? text : `${provider.name} ${text}`,
+            y_align: Clutter.ActorAlign.CENTER,
+          }),
+        );
       }
-      if (!logo) text = `${provider.name} ${text}`;
-
-      segment.add_child(
-        new St.Label({ text, y_align: Clutter.ActorAlign.CENTER }),
-      );
       this._panelTextBox.add_child(segment);
     });
   }
@@ -1045,11 +1157,7 @@ export default class CodexBarExtension extends Extension {
     if (!this._footerSection) return;
 
     const open = (uri) => () => {
-      try {
-        Gio.AppInfo.launch_default_for_uri(uri, null);
-      } catch (e) {
-        console.error(`[CodexBar] could not open ${uri}: ${e}`);
-      }
+      openUri(uri);
       this._indicator?.menu.close();
     };
     const add = (label, iconName, onActivate) => {
@@ -1125,12 +1233,7 @@ export default class CodexBarExtension extends Extension {
     ]) {
       const link = new St.Button({ label, style_class: "shell-link" });
       link.connect("clicked", () => {
-        try {
-          Gio.AppInfo.launch_default_for_uri(url, null);
-          dialog.close();
-        } catch (e) {
-          console.error(`[CodexBar] could not open ${url}: ${e}`);
-        }
+        if (openUri(url)) dialog.close();
       });
       dialog.contentLayout.add_child(link);
     }
@@ -1143,7 +1246,8 @@ export default class CodexBarExtension extends Extension {
       },
     ]);
     this._aboutDialog = dialog;
-    dialog.connect("destroy", () => {
+    this._aboutDialogSignalId = dialog.connect("destroy", () => {
+      this._aboutDialogSignalId = 0;
       if (this._aboutDialog === dialog) this._aboutDialog = null;
     });
     if (!dialog.open()) {
@@ -2031,6 +2135,8 @@ export default class CodexBarExtension extends Extension {
       label: _("Copy"),
     });
     copyBtn.connect("clicked", () => {
+      // Written only on this explicit user click; the metadata description
+      // declares the clipboard access for the reviewer.
       const clipboard = St.Clipboard.get_default();
       clipboard.set_text(St.ClipboardType.CLIPBOARD, commandText);
       copyBtn.label = _("Copied!");
@@ -2122,9 +2228,6 @@ export default class CodexBarExtension extends Extension {
       orientation: Clutter.Orientation.HORIZONTAL,
     });
 
-    let dep1StatusColor = codexbarExists ? "#2ec27e" : "#e01b24";
-    let dep1StatusText = codexbarExists ? _("● Installed") : _("● Missing");
-
     dep1Header.add_child(
       new St.Label({
         text: _("1. CodexBar CLI  "),
@@ -2132,10 +2235,9 @@ export default class CodexBarExtension extends Extension {
       }),
     );
     dep1Header.add_child(
-      new St.Label({
-        text: dep1StatusText,
-        style: `color: ${dep1StatusColor}; font-size: 0.85em; font-weight: bold;`,
-      }),
+      codexbarExists
+        ? statusLabel(_("Installed"), "#2ec27e", "emblem-ok-symbolic")
+        : statusLabel(_("Missing"), "#e01b24", "dialog-error-symbolic"),
     );
     dep1Box.add_child(dep1Header);
 
@@ -2163,11 +2265,6 @@ export default class CodexBarExtension extends Extension {
       orientation: Clutter.Orientation.HORIZONTAL,
     });
 
-    let dep2StatusColor = importerExists ? "#2ec27e" : "#ff7800";
-    let dep2StatusText = importerExists
-      ? _("● Installed")
-      : _("● Optional (only for codex users and only if you want not to find and copy manually a cookie value)");
-
     dep2Header.add_child(
       new St.Label({
         text: _("2. Cookie Importer  "),
@@ -2175,10 +2272,13 @@ export default class CodexBarExtension extends Extension {
       }),
     );
     dep2Header.add_child(
-      new St.Label({
-        text: dep2StatusText,
-        style: `color: ${dep2StatusColor}; font-size: 0.85em; font-weight: bold;`,
-      }),
+      importerExists
+        ? statusLabel(_("Installed"), "#2ec27e", "emblem-ok-symbolic")
+        : statusLabel(
+            _("Optional (only for codex users and only if you want not to find and copy manually a cookie value)"),
+            "#ff7800",
+            "dialog-warning-symbolic",
+          ),
     );
     dep2Box.add_child(dep2Header);
 
@@ -2211,11 +2311,6 @@ export default class CodexBarExtension extends Extension {
     // Verify if the certificate is already installed/trusted
     const systemCaCertsPath = "/usr/local/share/ca-certificates/antigravity.crt";
     const certInstalled = GLib.file_test(systemCaCertsPath, GLib.FileTest.EXISTS);
-    let dep3StatusColor = certInstalled ? "#2ec27e" : "#ff7800";
-    let dep3StatusText = certInstalled
-      ? _("● Installed")
-      : _("● Optional (for Antigravity)");
-
     dep3Header.add_child(
       new St.Label({
         text: _("3. AGY Server Certificate Trust Helper  "),
@@ -2223,10 +2318,13 @@ export default class CodexBarExtension extends Extension {
       }),
     );
     dep3Header.add_child(
-      new St.Label({
-        text: dep3StatusText,
-        style: `color: ${dep3StatusColor}; font-size: 0.85em; font-weight: bold;`,
-      }),
+      certInstalled
+        ? statusLabel(_("Installed"), "#2ec27e", "emblem-ok-symbolic")
+        : statusLabel(
+            _("Optional (for Antigravity)"),
+            "#ff7800",
+            "dialog-warning-symbolic",
+          ),
     );
     dep3Box.add_child(dep3Header);
 

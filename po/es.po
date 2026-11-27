@@ -167,12 +167,12 @@ msgid "Please configure your system dependencies:"
 msgstr "Configura las dependencias de tu sistema:"
 
 #: extension.js:1392 extension.js:1434 extension.js:1482
-msgid "● Installed"
-msgstr "● Instalado"
+msgid "Installed"
+msgstr "Instalado"
 
 #: extension.js:1392
-msgid "● Missing"
-msgstr "● Falta"
+msgid "Missing"
+msgstr "Falta"
 
 #: extension.js:1396
 msgid "1. CodexBar CLI  "
@@ -184,10 +184,10 @@ msgstr "Necesario para consultar las métricas de uso de IA."
 
 #: extension.js:1435
 msgid ""
-"● Optional (only for codex users and only if you want not to find and copy "
+"Optional (only for codex users and only if you want not to find and copy "
 "manually a cookie value)"
 msgstr ""
-"● Opcional (solo para usuarios de Codex y solo si no quieres buscar y copiar "
+"Opcional (solo para usuarios de Codex y solo si no quieres buscar y copiar "
 "manualmente el valor de una cookie)"
 
 #: extension.js:1439
@@ -203,8 +203,8 @@ msgstr ""
 "(ChatGPT). Esta cookie se usa para autenticarse en la API de uso de OpenAI"
 
 #: extension.js:1483
-msgid "● Optional (for Antigravity)"
-msgstr "● Opcional (para Antigravity)"
+msgid "Optional (for Antigravity)"
+msgstr "Opcional (para Antigravity)"
 
 #: extension.js:1487
 msgid "3. AGY Server Certificate Trust Helper  "
@@ -478,12 +478,12 @@ msgstr "Restablecer por defecto"
 
 #: prefs.js:767
 msgid ""
-"💡 Antigravity requires a trusted local SSL certificate to work. So we have "
+"Antigravity requires a trusted local SSL certificate to work. So we have "
 "made a python script to help you do this in a single command:\n"
 "\n"
 "pip install codexbar-ssl-helper && codexbar-ssl-helper"
 msgstr ""
-"💡 Antigravity necesita un certificado SSL local de confianza para "
+"Antigravity necesita un certificado SSL local de confianza para "
 "funcionar. Así que hemos creado un script de Python que te ayuda a hacerlo "
 "con un único comando:\\n\\npip install codexbar-ssl-helper && codexbar-ssl-"
 "helper"

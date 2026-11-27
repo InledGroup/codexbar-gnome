@@ -90,12 +90,6 @@
     background-color: rgba(127, 127, 127, 0.55);
 }
 
-.codexbar-refresh-spinner {
-    width: 16px;
-    text-align: center;
-    font-size: 14px;
-}
-
 .codexbar-usage-section {
     padding: 15px;
 }

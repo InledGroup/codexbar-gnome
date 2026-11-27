@@ -791,7 +791,7 @@ const CodexBarPrefsPage = GObject.registerClass(
               }
               const lsofLabel = new Gtk.Label({
                 label: _(
-                  `⚠️ Antigravity requires the 'lsof' utility to detect the local server ports. Run this command to install it:\n\n${lsofCmd}`,
+                  `Antigravity requires the 'lsof' utility to detect the local server ports. Run this command to install it:\n\n${lsofCmd}`,
                 ),
                 xalign: 0,
                 use_markup: false,
@@ -805,7 +805,7 @@ const CodexBarPrefsPage = GObject.registerClass(
             // Antigravity SSL certificate setup instruction
             const certLabel = new Gtk.Label({
               label: _(
-                "💡 Antigravity requires a trusted local SSL certificate to work. So we have made a python script to help you do this in a single command:\n\npip install codexbar-ssl-helper && codexbar-ssl-helper",
+                "Antigravity requires a trusted local SSL certificate to work. So we have made a python script to help you do this in a single command:\n\npip install codexbar-ssl-helper && codexbar-ssl-helper",
               ),
               xalign: 0,
               use_markup: false,
